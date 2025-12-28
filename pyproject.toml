@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swissarmyknifegis"
+version = "0.1.0"
+description = "A comprehensive GIS toolkit with GUI interface for working with raster and vector data"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "SwissArmyKnifeGIS Team"}
+]
+keywords = ["gis", "geospatial", "raster", "vector", "gdal", "gui"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+
+dependencies = [
+    "PySide6>=6.6.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "geopandas>=0.14.0",
+    "shapely>=2.0.0",
+    "fiona>=1.9.5",
+    "rasterio>=1.3.9",
+    "pyproj>=3.6.0",
+    "matplotlib>=3.8.0",
+    "Pillow>=10.0.0",
+    "rtree>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/swissarmyknifegis"
+Repository = "https://github.com/yourusername/swissarmyknifegis"
+
+[project.scripts]
+swissarmyknifegis = "swissarmyknifegis:run_app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
