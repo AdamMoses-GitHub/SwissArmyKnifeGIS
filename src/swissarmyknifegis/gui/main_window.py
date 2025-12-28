@@ -4,8 +4,8 @@ Main application window with tabbed interface for GIS tools.
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QMainWindow, QTabWidget, QWidget, QVBoxLayout,
-    QMenuBar, QMenu, QStatusBar, QMessageBox
+    QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
+    QMenuBar, QMenu, QStatusBar, QMessageBox, QPushButton
 )
 from PySide6.QtGui import QAction
 from swissarmyknifegis.gui.map_canvas import MapCanvas
@@ -22,7 +22,7 @@ class MainWindow(QMainWindow):
         
         # Initialize components
         self._setup_ui()
-        self._create_menus()
+        # self._create_menus()  # Commented out - menu bar hidden
         self._create_status_bar()
         
     def _setup_ui(self):
@@ -42,11 +42,27 @@ class MainWindow(QMainWindow):
         # Add placeholder for first tab (will be populated when user describes it)
         self._add_placeholder_tab()
         
+        # Create bottom button area
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()  # Push button to the right
+        
+        # Add Quit button
+        quit_button = QPushButton("Quit")
+        quit_button.clicked.connect(self.close)
+        quit_button.setFixedWidth(100)
+        button_layout.addWidget(quit_button)
+        
+        layout.addLayout(button_layout)
+        
     def _add_placeholder_tab(self):
         """Add tool tabs."""
         # Add Bounding Box Creator tool
         self.bbox_creator_tool = BoundingBoxCreatorTool()
         self.tab_widget.addTab(self.bbox_creator_tool, self.bbox_creator_tool.get_tool_name())
+        
+        # Add blank second tab
+        blank_tab = QWidget()
+        self.tab_widget.addTab(blank_tab, "Tab 2")
         
     def _create_menus(self):
         """Create application menu bar."""
