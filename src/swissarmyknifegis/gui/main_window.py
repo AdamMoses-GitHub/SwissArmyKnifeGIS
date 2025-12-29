@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QAction
 from swissarmyknifegis.gui.map_canvas import MapCanvas
-from swissarmyknifegis.tools import BoundingBoxCreatorTool
+from swissarmyknifegis.tools import BoundingBoxCreatorTool, GISCropperTool
 
 
 class MainWindow(QMainWindow):
@@ -60,9 +60,9 @@ class MainWindow(QMainWindow):
         self.bbox_creator_tool = BoundingBoxCreatorTool()
         self.tab_widget.addTab(self.bbox_creator_tool, self.bbox_creator_tool.get_tool_name())
         
-        # Add blank second tab
-        blank_tab = QWidget()
-        self.tab_widget.addTab(blank_tab, "Tab 2")
+        # Add GIS Cropper tool
+        self.gis_cropper_tool = GISCropperTool()
+        self.tab_widget.addTab(self.gis_cropper_tool, self.gis_cropper_tool.get_tool_name())
         
     def _create_menus(self):
         """Create application menu bar."""
