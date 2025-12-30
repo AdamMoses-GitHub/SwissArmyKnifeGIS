@@ -7,6 +7,7 @@ from typing import Optional, Tuple
 import zipfile
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QLabel, QLineEdit, QDoubleSpinBox, QComboBox, QPushButton,
@@ -99,6 +100,7 @@ class BoundingBoxCreatorTool(BaseTool):
         # UTM Zone (only for UTM input)
         self.utm_zone_input = QLineEdit()
         self.utm_zone_input.setPlaceholderText("e.g., 32633 for UTM Zone 33N")
+        self.utm_zone_input.setValidator(QIntValidator(1000, 32799))  # Valid EPSG range
         self.utm_zone_input.setEnabled(False)
         self.utm_zone_label = QLabel("EPSG Code:")
         centroid_layout.addRow(self.utm_zone_label, self.utm_zone_input)

@@ -1,7 +1,3 @@
-"""
-GIS Cropper Tool - Analyze and crop GIS files by bounding box.
-"""
-
 from pathlib import Path
 from typing import List, Dict, Optional
 import traceback
@@ -23,6 +19,54 @@ from swissarmyknifegis.tools.base_tool import BaseTool
 
 
 class GISCropperTool(BaseTool):
+    """
+    Tool for analyzing and cropping GIS files by bounding box.
+    """
+    def analyze_spatial_relationship(self, file_geom, bbox_geom, file_bounds, bbox_bounds, total_area=None, inside_area=None, total_pixels=None, inside_pixels=None):
+        """
+        Shared logic for overlap/containment and percentage calculation.
+        For vector: use area, for raster: use pixel counts.
+        """
+        from shapely.geometry.base import BaseGeometry
+        result = {}
+        # Percentage calculation
+        if total_area is not None and inside_area is not None:
+            percentage = (inside_area / total_area * 100) if total_area > 0 else 0.0
+        elif total_pixels is not None and inside_pixels is not None:
+            percentage = (inside_pixels / total_pixels * 100) if total_pixels > 0 else 0.0
+        else:
+            percentage = None
+        if percentage is not None:
+            result['percentage'] = round(percentage, 2)
+
+        # Containment/overlap
+        if isinstance(file_geom, BaseGeometry) and isinstance(bbox_geom, BaseGeometry):
+            if bbox_geom.contains(file_geom):
+                result['status'] = 'inside'
+                return result
+            if not bbox_geom.intersects(file_geom):
+                result['status'] = 'outside'
+                result['percentage'] = 0.0
+                return result
+            result['status'] = 'partial'
+            overlap_info = {}
+            if file_bounds[0] < bbox_bounds[0]:
+                overlap_info['extends_west'] = bbox_bounds[0] - file_bounds[0]
+            if file_bounds[2] > bbox_bounds[2]:
+                overlap_info['extends_east'] = file_bounds[2] - bbox_bounds[2]
+            if file_bounds[1] < bbox_bounds[1]:
+                overlap_info['extends_south'] = bbox_bounds[1] - file_bounds[1]
+            if file_bounds[3] > bbox_bounds[3]:
+                overlap_info['extends_north'] = file_bounds[3] - bbox_bounds[3]
+            result['overlap_info'] = overlap_info
+        return result
+
+    def ensure_same_crs(self, gdf, target_crs):
+        """Return GeoDataFrame in target_crs if needed and possible."""
+        if gdf.crs and target_crs and gdf.crs != target_crs:
+            return gdf.to_crs(target_crs)
+        return gdf
+
     def _get_shapely_geom(self, geom):
         # Helper to extract a shapely geometry from a GeoDataFrame, Series, or geometry
         import pandas as pd
@@ -442,8 +486,7 @@ class GISCropperTool(BaseTool):
             original_crs = gdf.crs
             
             # Reproject to bbox CRS if needed and possible
-            if gdf.crs and bbox_gdf.crs and gdf.crs != bbox_gdf.crs:
-                gdf = gdf.to_crs(bbox_gdf.crs)
+            gdf = self.ensure_same_crs(gdf, bbox_gdf.crs)
 
             # Get bbox geometry and bounds (ensure shapely geometry, not Series)
             bbox_geom = bbox_gdf.geometry.values[0] if hasattr(bbox_gdf.geometry, 'values') else bbox_gdf.geometry.iloc[0]
@@ -452,57 +495,18 @@ class GISCropperTool(BaseTool):
             # Get union of all geometries in the file as a shapely geometry
             file_geom = gdf.unary_union if hasattr(gdf, 'unary_union') else gdf.geometry.unary_union
             file_bounds = gdf.total_bounds
-
-            # Ensure both are shapely geometries
-            from shapely.geometry.base import BaseGeometry
-            if not isinstance(file_geom, BaseGeometry) or not isinstance(bbox_geom, BaseGeometry):
-                # Try to convert if possible
-                if hasattr(file_geom, 'values'):
-                    file_geom = file_geom.values[0]
-                if hasattr(bbox_geom, 'values'):
-                    bbox_geom = bbox_geom.values[0]
-                if not isinstance(file_geom, BaseGeometry) or not isinstance(bbox_geom, BaseGeometry):
-                    return {'status': 'error', 'error': 'Invalid geometry type', 'type': 'vector'}
-            
+            intersection_geom = file_geom.intersection(bbox_geom)
+            total_area = file_geom.area if file_geom.area > 0 else 0
+            inside_area = intersection_geom.area if not intersection_geom.is_empty else 0
             result = {
                 'type': 'vector',
                 'crs': str(original_crs),
                 'bounds': file_bounds
             }
-            
-            # Calculate intersection area for percentage
-            intersection_geom = file_geom.intersection(bbox_geom)
-            total_area = file_geom.area if file_geom.area > 0 else 0
-            inside_area = intersection_geom.area if not intersection_geom.is_empty else 0
-            percentage = (inside_area / total_area * 100) if total_area > 0 else 0.0
-            result['percentage'] = round(percentage, 2)
-
-            # Check if entirely within bbox
-            if bbox_geom.contains(file_geom):
-                result['status'] = 'inside'
-                return result
-
-            # Check if intersects at all
-            if not bbox_geom.intersects(file_geom):
-                result['status'] = 'outside'
-                result['percentage'] = 0.0
-                return result
-
-            # Must be partial overlap - calculate how much it extends
-            result['status'] = 'partial'
-            overlap_info = {}
-
-            # Check each direction
-            if file_bounds[0] < bbox_bounds[0]:  # Extends west
-                overlap_info['extends_west'] = bbox_bounds[0] - file_bounds[0]
-            if file_bounds[2] > bbox_bounds[2]:  # Extends east
-                overlap_info['extends_east'] = file_bounds[2] - bbox_bounds[2]
-            if file_bounds[1] < bbox_bounds[1]:  # Extends south
-                overlap_info['extends_south'] = bbox_bounds[1] - file_bounds[1]
-            if file_bounds[3] > bbox_bounds[3]:  # Extends north
-                overlap_info['extends_north'] = file_bounds[3] - bbox_bounds[3]
-
-            result['overlap_info'] = overlap_info
+            result.update(self.analyze_spatial_relationship(
+                file_geom, bbox_geom, file_bounds, bbox_bounds,
+                total_area=total_area, inside_area=inside_area
+            ))
             return result
             
         except Exception as e:
@@ -523,8 +527,7 @@ class GISCropperTool(BaseTool):
                 )
                 
                 # Reproject to bbox CRS if needed and possible
-                if raster_gdf.crs and bbox_gdf.crs and raster_gdf.crs != bbox_gdf.crs:
-                    raster_gdf = raster_gdf.to_crs(bbox_gdf.crs)
+                raster_gdf = self.ensure_same_crs(raster_gdf, bbox_gdf.crs)
                 # Get bbox geometry and bounds (ensure shapely geometry, not Series)
                 bbox_geom = self._get_shapely_geom(bbox_gdf.geometry)
                 bbox_bounds = bbox_gdf.total_bounds
@@ -536,12 +539,9 @@ class GISCropperTool(BaseTool):
                     'crs': str(original_crs),
                     'bounds': file_bounds
                 }
-                
                 # Calculate percentage of valid pixels within bbox
                 full_data = src.read(1, masked=True)
                 total_pixels = np.count_nonzero(~full_data.mask) if hasattr(full_data, 'mask') else full_data.size
-
-                # Ensure mapping gets a shapely geometry
                 from shapely.geometry.base import BaseGeometry
                 geom_for_mapping = bbox_geom if isinstance(bbox_geom, BaseGeometry) else self._get_shapely_geom(bbox_geom)
                 bbox_shapes = [mapping(geom_for_mapping)]
@@ -551,36 +551,10 @@ class GISCropperTool(BaseTool):
                     inside_pixels = np.count_nonzero(~clipped_masked.mask) if hasattr(clipped_masked, 'mask') else clipped_masked.size
                 except Exception:
                     inside_pixels = 0
-
-                percentage = (inside_pixels / total_pixels * 100) if total_pixels > 0 else 0.0
-                result['percentage'] = round(percentage, 2)
-
-                # Check if entirely within bbox
-                if bbox_geom.contains(raster_geom):
-                    result['status'] = 'inside'
-                    return result
-
-                # Check if intersects at all
-                if not bbox_geom.intersects(raster_geom):
-                    result['status'] = 'outside'
-                    result['percentage'] = 0.0
-                    return result
-
-                # Must be partial overlap - calculate how much it extends
-                result['status'] = 'partial'
-                overlap_info = {}
-
-                # Check each direction
-                if file_bounds[0] < bbox_bounds[0]:  # Extends west
-                    overlap_info['extends_west'] = bbox_bounds[0] - file_bounds[0]
-                if file_bounds[2] > bbox_bounds[2]:  # Extends east
-                    overlap_info['extends_east'] = file_bounds[2] - bbox_bounds[2]
-                if file_bounds[1] < bbox_bounds[1]:  # Extends south
-                    overlap_info['extends_south'] = bbox_bounds[1] - file_bounds[1]
-                if file_bounds[3] > bbox_bounds[3]:  # Extends north
-                    overlap_info['extends_north'] = file_bounds[3] - bbox_bounds[3]
-
-                result['overlap_info'] = overlap_info
+                result.update(self.analyze_spatial_relationship(
+                    raster_geom, bbox_geom, file_bounds, bbox_bounds,
+                    total_pixels=total_pixels, inside_pixels=inside_pixels
+                ))
                 return result
                 
         except Exception as e:
