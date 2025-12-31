@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
     QStatusBar, QMessageBox, QPushButton
 )
-from swissarmyknifegis.tools import BoundingBoxCreatorTool, GISCropperTool
+from swissarmyknifegis.tools import BoundingBoxCreatorTool, GISCropperTool, CoordinateConverterTool
 
 
 class MainWindow(QMainWindow):
@@ -60,6 +60,10 @@ class MainWindow(QMainWindow):
         # Add GIS Cropper tool
         self.gis_cropper_tool = GISCropperTool()
         self.tab_widget.addTab(self.gis_cropper_tool, self.gis_cropper_tool.get_tool_name())
+        
+        # Add Coordinate Converter tool
+        self.crs_converter_tool = CoordinateConverterTool()
+        self.tab_widget.addTab(self.crs_converter_tool, self.crs_converter_tool.get_tool_name())
         
     def _create_status_bar(self):
         """Create application status bar."""
