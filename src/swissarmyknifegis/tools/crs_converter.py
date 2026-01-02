@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QComboBox, QLineEdit, QPushButton, QTextEdit,
     QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView
+    QHeaderView, QAbstractItemView, QCheckBox
 )
 from PySide6.QtCore import Qt
 
@@ -19,8 +19,12 @@ from pyproj import CRS
 import geopandas as gpd
 import rasterio
 from rasterio.warp import calculate_default_transform, reproject, Resampling
+from osgeo import gdal, gdalconst
 
 from .base_tool import BaseTool
+
+# Configure GDAL to use Python exceptions
+gdal.UseExceptions()
 
 
 class CoordinateConverterTool(BaseTool):
@@ -60,6 +64,19 @@ class CoordinateConverterTool(BaseTool):
     def get_tool_name(self) -> str:
         """Return the display name for this tool."""
         return "CRS Converter"
+    
+    def _map_resampling_to_gdal(self, resampling_name: str) -> int:
+        """Map resampling method name to GDAL constant."""
+        resampling_map = {
+            'nearest': gdalconst.GRA_NearestNeighbour,
+            'bilinear': gdalconst.GRA_Bilinear,
+            'cubic': gdalconst.GRA_Cubic,
+            'cubicspline': gdalconst.GRA_CubicSpline,
+            'lanczos': gdalconst.GRA_Lanczos,
+            'average': gdalconst.GRA_Average,
+            'mode': gdalconst.GRA_Mode,
+        }
+        return resampling_map.get(resampling_name, gdalconst.GRA_Bilinear)
     
     def setup_ui(self):
         """Set up the user interface for the coordinate converter tool."""
@@ -154,6 +171,40 @@ class CoordinateConverterTool(BaseTool):
         output_group.setLayout(output_layout)
         main_layout.addWidget(output_group)
         
+        # === Raster Options ===
+        raster_options_group = QGroupBox("Raster Reprojection Options")
+        raster_options_layout = QFormLayout()
+        
+        # Resampling method
+        self.resampling_combo = QComboBox()
+        self.resampling_methods = {
+            "nearest": "Nearest Neighbor - Best for categorical data",
+            "bilinear": "Bilinear - Good for continuous data (default)",
+            "cubic": "Cubic - Smoothest for continuous data",
+            "cubicspline": "Cubic Spline - High quality (slower)",
+            "lanczos": "Lanczos - High quality (slowest)",
+            "average": "Average - Best for downsampling",
+            "mode": "Mode - Most common value",
+        }
+        self.resampling_combo.addItems(list(self.resampling_methods.values()))
+        self.resampling_combo.setCurrentIndex(1)  # Default to bilinear
+        raster_options_layout.addRow("Resampling Method:", self.resampling_combo)
+        
+        # Compression
+        self.compression_combo = QComboBox()
+        self.compression_combo.addItems(["LZW", "DEFLATE", "NONE"])
+        self.compression_combo.setCurrentIndex(0)  # Default to LZW
+        raster_options_layout.addRow("Compression:", self.compression_combo)
+        
+        # Multi-threaded
+        self.multithread_checkbox = QCheckBox("Use multi-threaded processing")
+        self.multithread_checkbox.setChecked(True)
+        self.multithread_checkbox.setToolTip("Enable multi-core processing for faster reprojection")
+        raster_options_layout.addRow("", self.multithread_checkbox)
+        
+        raster_options_group.setLayout(raster_options_layout)
+        main_layout.addWidget(raster_options_group)
+        
         # === Reproject Controls ===
         reproject_layout = QHBoxLayout()
         
@@ -231,15 +282,19 @@ class CoordinateConverterTool(BaseTool):
     
     def _add_files(self):
         """Add GIS files to the conversion list."""
+        last_path = self._get_last_path("paths/input/gis_files")
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
             "Select GIS Files",
-            "",
+            last_path,
             "All Supported (*.shp *.geojson *.json *.gpkg *.kml *.gml *.tif *.tiff *.img);;Vector (*.shp *.geojson *.json *.gpkg *.kml *.gml);;Raster (*.tif *.tiff *.img);;All Files (*.*)"
         )
         
         if not file_paths:
             return
+        
+        # Save the directory of the first selected file
+        self._save_last_path("paths/input/gis_files", file_paths[0])
         
         self.results_display.clear()
         
@@ -411,13 +466,15 @@ class CoordinateConverterTool(BaseTool):
     
     def _browse_output_directory(self):
         """Browse for output directory."""
+        last_path = self._get_last_path("paths/output/directory")
         dir_path = QFileDialog.getExistingDirectory(
             self,
             "Select Output Directory",
-            ""
+            last_path
         )
         
         if dir_path:
+            self._save_last_path("paths/output/directory", dir_path)
             self.output_dir_path.setText(dir_path)
     
     def _get_output_crs(self) -> Optional[CRS]:
@@ -516,37 +573,64 @@ class CoordinateConverterTool(BaseTool):
         gdf_reprojected.to_file(output_path, driver=driver)
     
     def _reproject_raster(self, file_info: Dict[str, Any], output_crs: CRS, output_path: str):
-        """Reproject a raster file."""
-        with rasterio.open(file_info['path']) as src:
-            if src.crs is None:
+        """Reproject a raster file using GDAL Warp for better performance."""
+        # Get resampling method from UI
+        resampling_text = self.resampling_combo.currentText()
+        resampling_name = next(
+            k for k, v in self.resampling_methods.items()
+            if v == resampling_text
+        )
+        gdal_resampling = self._map_resampling_to_gdal(resampling_name)
+        
+        # Get compression setting
+        compression = self.compression_combo.currentText()
+        
+        # Get multi-threading setting
+        use_multithread = self.multithread_checkbox.isChecked()
+        
+        # Open source dataset
+        src_ds = gdal.Open(file_info['path'], gdal.GA_ReadOnly)
+        if src_ds is None:
+            raise Exception("Failed to open raster file")
+        
+        try:
+            # Check if source has CRS
+            src_crs = src_ds.GetProjection()
+            if not src_crs:
                 raise Exception("No CRS defined - cannot reproject")
             
-            # Calculate transform and dimensions for output
-            transform, width, height = calculate_default_transform(
-                src.crs, output_crs, src.width, src.height, *src.bounds
-            )
+            # Prepare warp options
+            warp_options = {
+                'format': 'GTiff',
+                'dstSRS': output_crs.to_wkt(),
+                'resampleAlg': gdal_resampling,
+                'creationOptions': [],
+            }
             
-            # Update metadata
-            kwargs = src.meta.copy()
-            kwargs.update({
-                'crs': output_crs,
-                'transform': transform,
-                'width': width,
-                'height': height
-            })
+            # Add compression
+            if compression != 'NONE':
+                warp_options['creationOptions'].append(f'COMPRESS={compression}')
             
-            # Create output file
-            with rasterio.open(output_path, 'w', **kwargs) as dst:
-                for i in range(1, src.count + 1):
-                    reproject(
-                        source=rasterio.band(src, i),
-                        destination=rasterio.band(dst, i),
-                        src_transform=src.transform,
-                        src_crs=src.crs,
-                        dst_transform=transform,
-                        dst_crs=output_crs,
-                        resampling=Resampling.bilinear
-                    )
+            # Add tiling for better performance
+            warp_options['creationOptions'].extend(['TILED=YES', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256'])
+            
+            # Add multi-threading
+            if use_multithread:
+                warp_options['multithread'] = True
+                warp_options['warpOptions'] = ['NUM_THREADS=ALL_CPUS']
+            
+            # Perform warp
+            warp_opts = gdal.WarpOptions(**warp_options)
+            result_ds = gdal.Warp(output_path, src_ds, options=warp_opts)
+            
+            if result_ds is None:
+                raise Exception("GDAL Warp failed")
+            
+            # Clean up
+            result_ds = None
+            
+        finally:
+            src_ds = None
     
     def validate_inputs(self) -> bool:
         """Validate user inputs."""

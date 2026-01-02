@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import List, Dict, Optional
 import traceback
+import tempfile
+import json
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -14,8 +16,12 @@ import rasterio
 from rasterio.mask import mask
 from shapely.geometry import box, mapping
 import numpy as np
+from osgeo import gdal, ogr, osr
 
 from swissarmyknifegis.tools.base_tool import BaseTool
+
+# Configure GDAL to use Python exceptions
+gdal.UseExceptions()
 
 
 class GISCropperTool(BaseTool):
@@ -196,14 +202,16 @@ class GISCropperTool(BaseTool):
         
     def _on_add_gis_files(self):
         """Handle Add Files button click."""
+        last_path = self._get_last_path("paths/input/gis_files")
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
             "Select GIS Files",
-            "",
+            last_path,
             "GIS Files (*.shp *.geojson *.gpkg *.kml *.tif *.tiff *.img *.asc);;All Files (*)"
         )
         
         if file_paths:
+            self._save_last_path("paths/input/gis_files", file_paths[0])
             for file_path in file_paths:
                 if file_path not in self.gis_files:
                     self.gis_files.append(file_path)
@@ -240,14 +248,16 @@ class GISCropperTool(BaseTool):
         
     def _on_browse_bbox(self):
         """Handle Browse button click for bounding box selection."""
+        last_path = self._get_last_path("paths/gis_cropper/bbox_file")
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Select Bounding Box File",
-            "",
+            last_path,
             "Vector Files (*.shp *.geojson *.gpkg *.kml *.gml);;All Files (*)"
         )
         
         if file_path:
+            self._save_last_path("paths/gis_cropper/bbox_file", file_path)
             self.bbox_file = file_path
             self.bbox_path_input.setText(file_path)
             
@@ -279,13 +289,15 @@ class GISCropperTool(BaseTool):
             
     def _on_browse_output(self):
         """Handle Browse button click for output directory."""
+        last_path = self._get_last_path("paths/output/directory")
         dir_path = QFileDialog.getExistingDirectory(
             self,
             "Select Output Directory",
-            ""
+            last_path
         )
         
         if dir_path:
+            self._save_last_path("paths/output/directory", dir_path)
             self.output_dir_input.setText(dir_path)
             
     def _on_analyze(self):
@@ -599,33 +611,54 @@ class GISCropperTool(BaseTool):
             clipped.to_file(output_path)
             
     def _crop_raster(self, file_path: str, bbox_gdf: gpd.GeoDataFrame, output_path: Path):
-        """Crop raster file by bounding box."""
-        with rasterio.open(file_path) as src:
+        """Crop raster file by bounding box using GDAL Warp for better performance."""
+        # Open source raster to get CRS
+        src_ds = gdal.Open(file_path, gdal.GA_ReadOnly)
+        if src_ds is None:
+            raise Exception(f"Failed to open raster: {file_path}")
+        
+        try:
+            # Get raster CRS
+            src_srs = osr.SpatialReference()
+            src_srs.ImportFromWkt(src_ds.GetProjection())
+            
             # Reproject bbox to raster CRS
-            bbox_reprojected = bbox_gdf.to_crs(src.crs)
+            bbox_reprojected = bbox_gdf.to_crs(src_srs.ExportToProj4())
             bbox_geom = bbox_reprojected.geometry.iloc[0]
             
-            # Crop raster
-            out_image, out_transform = mask(
-                src,
-                [mapping(bbox_geom)],
-                crop=True,
-                filled=True
-            )
+            # Create a temporary GeoJSON file for the cutline
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.geojson', delete=False) as tmp:
+                cutline_path = tmp.name
+                # Write bbox geometry as GeoJSON
+                cutline_gdf = gpd.GeoDataFrame([{'geometry': bbox_geom}], crs=bbox_reprojected.crs)
+                cutline_gdf.to_file(cutline_path, driver='GeoJSON')
             
-            # Update metadata
-            out_meta = src.meta.copy()
-            out_meta.update({
-                "driver": "GTiff",
-                "height": out_image.shape[1],
-                "width": out_image.shape[2],
-                "transform": out_transform
-            })
-            
-            # Ensure output has .tif extension for GeoTIFF
-            if output_path.suffix.lower() not in ['.tif', '.tiff']:
-                output_path = output_path.with_suffix('.tif')
-            
-            # Write cropped raster
-            with rasterio.open(output_path, "w", **out_meta) as dest:
-                dest.write(out_image)
+            try:
+                # Ensure output has .tif extension
+                if output_path.suffix.lower() not in ['.tif', '.tiff']:
+                    output_path = output_path.with_suffix('.tif')
+                
+                # Use GDAL Warp to crop with cutline
+                warp_options = gdal.WarpOptions(
+                    format='GTiff',
+                    cutlineDSName=cutline_path,
+                    cropToCutline=True,
+                    creationOptions=['COMPRESS=LZW', 'TILED=YES']
+                )
+                
+                result_ds = gdal.Warp(str(output_path), src_ds, options=warp_options)
+                
+                if result_ds is None:
+                    raise Exception("GDAL Warp failed during crop operation")
+                
+                # Clean up
+                result_ds = None
+                
+            finally:
+                # Remove temporary cutline file
+                import os
+                if os.path.exists(cutline_path):
+                    os.remove(cutline_path)
+        
+        finally:
+            src_ds = None

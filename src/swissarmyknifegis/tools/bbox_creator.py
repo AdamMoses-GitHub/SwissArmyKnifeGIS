@@ -565,14 +565,17 @@ class BoundingBoxCreatorTool(BaseTool):
             
     def _on_browse_output(self):
         """Handle Browse button click for output path selection."""
+        last_path = self._get_last_path("paths/bbox_creator/output_file")
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Select Output Path and Filename Prefix",
-            "",
+            last_path,
             "All Files (*)"
         )
         
         if file_path:
+            # Save the directory for next time
+            self._save_last_path("paths/bbox_creator/output_file", file_path)
             # Remove any extension if provided
             file_path = Path(file_path).with_suffix('')
             self.output_path_input.setText(str(file_path))

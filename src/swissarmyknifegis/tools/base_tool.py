@@ -2,9 +2,13 @@
 Base class for GIS tool tabs.
 """
 
+import os
 from abc import ABCMeta, abstractmethod
+from pathlib import Path
+from typing import Optional
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import QObject
+from swissarmyknifegis.core.config_manager import get_config_manager
 
 
 class QABCMeta(type(QWidget), ABCMeta):
@@ -77,3 +81,35 @@ class BaseTool(QWidget, metaclass=QABCMeta):
         Override this method to clear any user inputs or intermediate results.
         """
         pass
+    
+    def _get_last_path(self, config_key: str, default: Optional[str] = None) -> str:
+        """Get the last used path for a specific operation.
+        
+        Args:
+            config_key: Configuration key for the path (e.g., 'input/raster_files')
+            default: Default path if no saved path exists
+            
+        Returns:
+            Path string to use as starting directory
+        """
+        config = get_config_manager()
+        return config.get_path(config_key, default)
+    
+    def _save_last_path(self, config_key: str, path: str):
+        """Save the last used path for a specific operation.
+        
+        Args:
+            config_key: Configuration key for the path (e.g., 'input/raster_files')
+            path: File or directory path to save
+        """
+        if not path:
+            return
+        
+        config = get_config_manager()
+        
+        # If path is a file, save its directory
+        path_obj = Path(path)
+        if path_obj.is_file():
+            path = str(path_obj.parent)
+        
+        config.set_path(config_key, path)
