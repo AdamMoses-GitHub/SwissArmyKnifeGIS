@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
     QStatusBar, QMessageBox, QPushButton
 )
-from swissarmyknifegis.tools import BoundingBoxCreatorTool, GISCropperTool, CoordinateConverterTool
+from swissarmyknifegis.tools import BoundingBoxCreatorTool, GISCropperTool, CoordinateConverterTool, RasterMergerTool
 
 
 class MainWindow(QMainWindow):
@@ -64,6 +64,10 @@ class MainWindow(QMainWindow):
         # Add Coordinate Converter tool
         self.crs_converter_tool = CoordinateConverterTool()
         self.tab_widget.addTab(self.crs_converter_tool, self.crs_converter_tool.get_tool_name())
+        
+        # Add Raster Merger tool
+        self.raster_merger_tool = RasterMergerTool()
+        self.tab_widget.addTab(self.raster_merger_tool, self.raster_merger_tool.get_tool_name())
         
     def _create_status_bar(self):
         """Create application status bar."""
