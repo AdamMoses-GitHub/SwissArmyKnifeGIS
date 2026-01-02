@@ -266,20 +266,9 @@ class CoordinateConverterTool(BaseTool):
         """Set up UI for file reprojection."""
         form_layout = QFormLayout()
         
-        # Input file
-        input_file_layout = QHBoxLayout()
-        self.input_file_path = QLineEdit()
-        self.input_file_path.setPlaceholderText("Select input file...")
-        self.input_file_path.setMinimumWidth(300)
+        # Input file (use add files button instead)
+        # Note: Single file mode is handled through the add files dialog
         
-        browse_input_btn = QPushButton("Browse...")
-        browse_input_btn.clicked.connect(self._browse_input_file)
-        
-        input_file_layout.addWidget(self.input_file_path)
-        input_file_layout.addWidget(browse_input_btn)
-        form_layout.addRow("Input File:", input_file_layout)
-        
-    
     def _add_files(self):
         """Add GIS files to the conversion list."""
         last_path = self._get_last_path("paths/input/gis_files")

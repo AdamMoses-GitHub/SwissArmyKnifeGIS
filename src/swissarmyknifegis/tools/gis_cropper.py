@@ -107,7 +107,7 @@ class GISCropperTool(BaseTool):
     def setup_ui(self):
         """Set up the user interface."""
         main_layout = QVBoxLayout(self)
-        main_layout.setAlignment(Qt.AlignTop)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
         # GIS Files Selection Group
         gis_files_group = QGroupBox("GIS Files to Process")
@@ -420,6 +420,15 @@ class GISCropperTool(BaseTool):
             )
             return
         
+        # Validate inputs
+        if not self.gis_files:
+            QMessageBox.warning(self, "Error", "Please add GIS files first")
+            return
+        
+        if not self.bbox_file:
+            QMessageBox.warning(self, "Error", "Please select a bounding box file first")
+            return
+        
         output_dir = Path(self.output_dir_input.text())
         if not output_dir.exists():
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -428,8 +437,19 @@ class GISCropperTool(BaseTool):
         self.results_text.clear()
         self.results_text.append("=== CROPPING FILES ===\n")
         
-        # Load bbox
-        bbox_gdf = gpd.read_file(self.bbox_file)
+        # Load bbox with error handling
+        try:
+            bbox_gdf = gpd.read_file(self.bbox_file)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load bounding box file: {str(e)}")
+            self.results_text.append(f"✗ Error loading bbox: {str(e)}")
+            return
+        
+        # Validate bbox CRS
+        if bbox_gdf.crs is None:
+            QMessageBox.critical(self, "Error", "Bounding box file has no CRS defined")
+            self.results_text.append("✗ Bounding box has no CRS")
+            return
         
         cropped_count = 0
         skipped_count = 0
@@ -577,11 +597,15 @@ class GISCropperTool(BaseTool):
         # Read vector file
         gdf = gpd.read_file(file_path)
         
+        # Validate input CRS
+        if bbox_gdf.crs is None:
+            raise ValueError("Bounding box has no CRS defined")
+        
         # Reproject to bbox CRS if needed
         if gdf.crs != bbox_gdf.crs:
             gdf = gdf.to_crs(bbox_gdf.crs)
         
-        # Get bbox geometry
+        # Get bbox geometry as Shapely geometry object
         bbox_geom = bbox_gdf.geometry.iloc[0]
         
         # Clip geometries
