@@ -62,17 +62,8 @@ class RasterMergerTool(BaseTool):
         return dtype_map.get(numpy_dtype, gdalconst.GDT_Float32)
     
     def _map_resampling_to_gdal(self, resampling_name: str) -> int:
-        """Map resampling method name to GDAL constant."""
-        resampling_map = {
-            'nearest': gdalconst.GRA_NearestNeighbour,
-            'bilinear': gdalconst.GRA_Bilinear,
-            'cubic': gdalconst.GRA_Cubic,
-            'average': gdalconst.GRA_Average,
-            'mode': gdalconst.GRA_Mode,
-            'max': gdalconst.GRA_Max,
-            'min': gdalconst.GRA_Min,
-        }
-        return resampling_map.get(resampling_name, gdalconst.GRA_Bilinear)
+        """Map resampling method name to GDAL constant. Uses BaseTool.map_resampling_to_gdal."""
+        return BaseTool.map_resampling_to_gdal(resampling_name)
     
     def _get_gdal_merge_algorithm(self, merge_method: str) -> Optional[str]:
         """Get GDAL VRT pixel function for merge method, or None if not supported."""

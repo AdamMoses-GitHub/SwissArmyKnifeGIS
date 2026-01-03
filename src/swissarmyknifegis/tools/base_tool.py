@@ -6,7 +6,7 @@ import os
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import Optional
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget, QFileDialog
 from PySide6.QtCore import QObject
 from swissarmyknifegis.core.config_manager import get_config_manager
 
@@ -113,3 +113,30 @@ class BaseTool(QWidget, metaclass=QABCMeta):
             path = str(path_obj.parent)
         
         config.set_path(config_key, path)
+    
+    @staticmethod
+    def map_resampling_to_gdal(resampling_name: str) -> int:
+        """Map resampling method name to GDAL constant.
+        
+        Supports common resampling methods used in raster processing.
+        
+        Args:
+            resampling_name: Name of resampling method (e.g., 'bilinear', 'nearest')
+            
+        Returns:
+            GDAL resampling constant. Defaults to GRA_Bilinear if name not found.
+        """
+        from osgeo import gdalconst
+        
+        resampling_map = {
+            'nearest': gdalconst.GRA_NearestNeighbour,
+            'bilinear': gdalconst.GRA_Bilinear,
+            'cubic': gdalconst.GRA_Cubic,
+            'cubicspline': gdalconst.GRA_CubicSpline,
+            'lanczos': gdalconst.GRA_Lanczos,
+            'average': gdalconst.GRA_Average,
+            'mode': gdalconst.GRA_Mode,
+            'max': gdalconst.GRA_Max,
+            'min': gdalconst.GRA_Min,
+        }
+        return resampling_map.get(resampling_name.lower(), gdalconst.GRA_Bilinear)

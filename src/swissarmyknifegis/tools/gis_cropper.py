@@ -521,11 +521,11 @@ class GISCropperTool(BaseTool):
             gdf = self.ensure_same_crs(gdf, bbox_gdf.crs)
 
             # Get bbox geometry and bounds (ensure shapely geometry, not Series)
-            bbox_geom = bbox_gdf.geometry.values[0] if hasattr(bbox_gdf.geometry, 'values') else bbox_gdf.geometry.iloc[0]
+            bbox_geom = bbox_gdf.geometry.values[0]
             bbox_bounds = bbox_gdf.total_bounds
 
             # Get union of all geometries in the file as a shapely geometry
-            file_geom = gdf.unary_union if hasattr(gdf, 'unary_union') else gdf.geometry.unary_union
+            file_geom = gdf.geometry.unary_union
             file_bounds = gdf.total_bounds
             intersection_geom = file_geom.intersection(bbox_geom)
             total_area = file_geom.area if file_geom.area > 0 else 0
@@ -606,10 +606,10 @@ class GISCropperTool(BaseTool):
             gdf = gdf.to_crs(bbox_gdf.crs)
         
         # Get bbox geometry as Shapely geometry object
-        bbox_geom = bbox_gdf.geometry.iloc[0]
+        bbox_geom = bbox_gdf.geometry.values[0]
         
-        # Clip geometries
-        clipped = gdf.clip(bbox_geom)
+        # Clip geometries - convert to tuple of bounds for clip operation
+        clipped = gdf.clip(bbox_gdf)
         
         # Save to output
         # Determine driver based on extension
@@ -648,7 +648,7 @@ class GISCropperTool(BaseTool):
             
             # Reproject bbox to raster CRS
             bbox_reprojected = bbox_gdf.to_crs(src_srs.ExportToProj4())
-            bbox_geom = bbox_reprojected.geometry.iloc[0]
+            bbox_geom = bbox_reprojected.geometry.values[0]
             
             # Create a temporary GeoJSON file for the cutline
             with tempfile.NamedTemporaryFile(mode='w', suffix='.geojson', delete=False) as tmp:

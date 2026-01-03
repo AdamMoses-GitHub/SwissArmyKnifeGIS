@@ -23,6 +23,11 @@ from osgeo import gdal, gdalconst
 
 from .base_tool import BaseTool
 
+# Type hints
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    pass
+
 # Configure GDAL to use Python exceptions
 gdal.UseExceptions()
 
@@ -52,12 +57,18 @@ class CoordinateConverterTool(BaseTool):
         # because super().__init__() calls setup_ui() which uses self.loaded_files
         self.loaded_files: List[Dict[str, Any]] = []
         
-        # UI Components
-        self.files_table = None
-        self.output_crs_combo = None
-        self.output_crs_epsg = None
-        self.output_dir_path = None
-        self.results_display = None
+        # UI Components - will be initialized in setup_ui()
+        self.files_table: QTableWidget
+        self.output_crs_combo: QComboBox
+        self.output_crs_epsg: QLineEdit
+        self.output_dir_path: QLineEdit
+        self.results_display: QTextEdit
+        self.output_crs_info: QPushButton
+        self.resampling_combo: QComboBox
+        self.compression_combo: QComboBox
+        self.multithread_checkbox: QCheckBox
+        self.reproject_btn: QPushButton
+        self.resampling_methods: Dict[str, str] = {}
         
         super().__init__()
         
@@ -66,17 +77,8 @@ class CoordinateConverterTool(BaseTool):
         return "CRS Converter"
     
     def _map_resampling_to_gdal(self, resampling_name: str) -> int:
-        """Map resampling method name to GDAL constant."""
-        resampling_map = {
-            'nearest': gdalconst.GRA_NearestNeighbour,
-            'bilinear': gdalconst.GRA_Bilinear,
-            'cubic': gdalconst.GRA_Cubic,
-            'cubicspline': gdalconst.GRA_CubicSpline,
-            'lanczos': gdalconst.GRA_Lanczos,
-            'average': gdalconst.GRA_Average,
-            'mode': gdalconst.GRA_Mode,
-        }
-        return resampling_map.get(resampling_name, gdalconst.GRA_Bilinear)
+        """Map resampling method name to GDAL constant. Uses BaseTool.map_resampling_to_gdal."""
+        return BaseTool.map_resampling_to_gdal(resampling_name)
     
     def setup_ui(self):
         """Set up the user interface for the coordinate converter tool."""
