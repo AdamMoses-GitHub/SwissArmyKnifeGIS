@@ -22,7 +22,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._create_status_bar()
         
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         """Set up the main UI components."""
         # Create central widget with layout
         central_widget = QWidget()
@@ -51,7 +51,7 @@ class MainWindow(QMainWindow):
         
         layout.addLayout(button_layout)
         
-    def _add_placeholder_tab(self):
+    def _add_placeholder_tab(self) -> None:
         """Add tool tabs."""
         # Add Bounding Box Creator tool
         self.bbox_creator_tool = BoundingBoxCreatorTool()
@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         self.raster_merger_tool = RasterMergerTool()
         self.tab_widget.addTab(self.raster_merger_tool, self.raster_merger_tool.get_tool_name())
         
-    def _create_status_bar(self):
+    def _create_status_bar(self) -> None:
         """Create application status bar."""
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)

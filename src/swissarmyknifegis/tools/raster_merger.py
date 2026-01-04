@@ -539,10 +539,15 @@ class RasterMergerTool(BaseTool):
             
             # Create in-memory VRT
             self.results_display.append("Building VRT with target resolution...")
-            vrt_dataset = gdal.BuildVRT('', input_files, options=vrt_options)
-            
-            if vrt_dataset is None:
-                raise Exception("Failed to create VRT")
+            try:
+                vrt_dataset = gdal.BuildVRT('', input_files, options=vrt_options)
+                if vrt_dataset is None:
+                    raise RuntimeError("GDAL BuildVRT returned None - failed to create VRT")
+                # Validate that VRT has expected properties
+                if vrt_dataset.RasterCount == 0:
+                    raise RuntimeError("VRT created but contains no raster bands")
+            except gdal.error as e:
+                raise RuntimeError(f"GDAL error while building VRT: {str(e)}") from e
             
             # Apply pixel function if specified
             if pixel_function:

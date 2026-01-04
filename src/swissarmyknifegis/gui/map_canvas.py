@@ -92,26 +92,26 @@ class MapCanvas(QGraphicsView):
         else:
             super().mouseReleaseEvent(event)
             
-    def zoom_in(self):
+    def zoom_in(self) -> None:
         """Zoom in by fixed factor."""
         if self.current_zoom * self.zoom_factor <= self.max_zoom:
             self.scale(self.zoom_factor, self.zoom_factor)
             self.current_zoom *= self.zoom_factor
             
-    def zoom_out(self):
+    def zoom_out(self) -> None:
         """Zoom out by fixed factor."""
         if self.current_zoom / self.zoom_factor >= self.min_zoom:
             factor = 1.0 / self.zoom_factor
             self.scale(factor, factor)
             self.current_zoom *= factor
             
-    def zoom_to_extent(self):
+    def zoom_to_extent(self) -> None:
         """Zoom to fit all items in the scene."""
         self.fitInView(self.scene.itemsBoundingRect(), Qt.KeepAspectRatio)
         # Reset zoom level tracking
         self.current_zoom = 1.0
         
-    def reset_view(self):
+    def reset_view(self) -> None:
         """Reset view to default zoom and position."""
         self.resetTransform()
         self.current_zoom = 1.0

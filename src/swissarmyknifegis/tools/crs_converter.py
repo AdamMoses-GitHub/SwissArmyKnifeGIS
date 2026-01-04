@@ -469,14 +469,51 @@ class CoordinateConverterTool(BaseTool):
             self.output_dir_path.setText(dir_path)
     
     def _get_output_crs(self) -> Optional[CRS]:
-        """Get the output CRS object."""
+        """Get and validate the output CRS object."""
         crs_string = self.output_crs_epsg.text().strip()
         if not crs_string:
             QMessageBox.warning(self, "Missing CRS", "Please select or enter an output CRS.")
             return None
         
         try:
-            return CRS.from_string(crs_string)
+            output_crs = CRS.from_string(crs_string)
+            # Validate input files have CRS before allowing reprojection
+            for file_info in self.loaded_files:
+                if file_info['type'] == 'Vector':
+                    try:
+                        gdf = gpd.read_file(file_info['path'])
+                        if gdf.crs is None:
+                            QMessageBox.warning(
+                                self,
+                                "Missing CRS",
+                                f"File '{file_info['filename']}' has no CRS defined. Cannot reproject."
+                            )
+                            return None
+                    except Exception as e:
+                        QMessageBox.critical(
+                            self,
+                            "Error Reading File",
+                            f"Failed to read file '{file_info['filename']}': {str(e)}"
+                        )
+                        return None
+                else:  # Raster
+                    try:
+                        with rasterio.open(file_info['path']) as src:
+                            if src.crs is None:
+                                QMessageBox.warning(
+                                    self,
+                                    "Missing CRS",
+                                    f"File '{file_info['filename']}' has no CRS defined. Cannot reproject."
+                                )
+                                return None
+                    except Exception as e:
+                        QMessageBox.critical(
+                            self,
+                            "Error Reading File",
+                            f"Failed to read file '{file_info['filename']}': {str(e)}"
+                        )
+                        return None
+            return output_crs
         except Exception as e:
             QMessageBox.critical(self, "Invalid CRS", f"Invalid output CRS: {str(e)}")
             return None
