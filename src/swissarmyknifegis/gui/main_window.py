@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
     QStatusBar, QMessageBox, QPushButton
 )
-from swissarmyknifegis.tools import BoundingBoxCreatorTool, GISCropperTool, CoordinateConverterTool, RasterMergerTool
+from swissarmyknifegis.tools import AboutTab, BoundingBoxCreatorTool, GISCropperTool, CoordinateConverterTool, RasterMergerTool
 
 
 class MainWindow(QMainWindow):
@@ -52,7 +52,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(button_layout)
         
     def _add_placeholder_tab(self) -> None:
-        """Add tool tabs."""
+        """Add tool tabs. The About tab is always added last to remain rightmost."""
         # Add Bounding Box Creator tool
         self.bbox_creator_tool = BoundingBoxCreatorTool()
         self.tab_widget.addTab(self.bbox_creator_tool, self.bbox_creator_tool.get_tool_name())
@@ -68,6 +68,10 @@ class MainWindow(QMainWindow):
         # Add Raster Merger tool
         self.raster_merger_tool = RasterMergerTool()
         self.tab_widget.addTab(self.raster_merger_tool, self.raster_merger_tool.get_tool_name())
+        
+        # Add About tab last so it remains as the rightmost tab
+        self.about_tab = AboutTab()
+        self.tab_widget.addTab(self.about_tab, self.about_tab.get_tool_name())
         
     def _create_status_bar(self) -> None:
         """Create application status bar."""
