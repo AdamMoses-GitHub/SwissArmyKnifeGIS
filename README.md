@@ -2,7 +2,7 @@
 
 _Because learning QGIS just to crop a raster is like buying a Ferrari to get groceries._
 
-![Version](https://img.shields.io/badge/version-beta-orange)
+![Version](https://img.shields.io/badge/version-0.1.1-orange)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
