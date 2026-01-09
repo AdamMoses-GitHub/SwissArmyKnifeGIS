@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,
     QStatusBar, QMessageBox, QPushButton
 )
-from swissarmyknifegis.tools import AboutTab, BoundingBoxCreatorTool, GISCropperTool, CoordinateConverterTool, RasterMergerTool
+from swissarmyknifegis.tools import AboutTab, BoundingBoxCreatorTool, QuadBBoxCreatorTool, GISCropperTool, CoordinateConverterTool, RasterMergerTool
 
 
 class MainWindow(QMainWindow):
@@ -56,6 +56,10 @@ class MainWindow(QMainWindow):
         # Add Bounding Box Creator tool
         self.bbox_creator_tool = BoundingBoxCreatorTool()
         self.tab_widget.addTab(self.bbox_creator_tool, self.bbox_creator_tool.get_tool_name())
+        
+        # Add 4-Point BBox Creator tool
+        self.quad_bbox_creator_tool = QuadBBoxCreatorTool()
+        self.tab_widget.addTab(self.quad_bbox_creator_tool, self.quad_bbox_creator_tool.get_tool_name())
         
         # Add GIS Cropper tool
         self.gis_cropper_tool = GISCropperTool()

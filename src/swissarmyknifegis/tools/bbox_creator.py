@@ -37,7 +37,7 @@ class BoundingBoxCreatorTool(BaseTool):
         
     def get_tool_name(self) -> str:
         """Return the display name for this tool."""
-        return "Bounding Box Creator"
+        return "BBox - Centroid"
         
     def setup_ui(self):
         """Set up the user interface."""
