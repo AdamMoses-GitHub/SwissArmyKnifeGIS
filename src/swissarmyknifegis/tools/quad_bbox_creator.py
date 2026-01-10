@@ -69,7 +69,7 @@ class QuadBBoxCreatorTool(BaseTool):
         
         self.utm_epsg_input = QLineEdit()
         self.utm_epsg_input.setPlaceholderText("e.g., 32632 for UTM Zone 32N")
-        self.utm_epsg_input.setValidator(QIntValidator(32601, 32660))
+        self.utm_epsg_input.setValidator(QIntValidator(32601, 32760))
         utm_zone_layout.addRow("EPSG Code:", self.utm_epsg_input)
         
         self.utm_zone_group.setLayout(utm_zone_layout)
@@ -83,17 +83,25 @@ class QuadBBoxCreatorTool(BaseTool):
         self.location_combo = QComboBox()
         self.location_combo.addItem("-- Select City --", None)
         
-        # Add US cities
+        # Add US cities with separator
+        self.location_combo.addItem("=== UNITED STATES ===", None)
         for city_name, coords in self.cities.items():
             if ", USA" in city_name:
                 self.location_combo.addItem(city_name, coords)
         
-        # Add international cities
+        # Add international cities with separator
+        self.location_combo.addItem("=== INTERNATIONAL ===", None)
         for city_name, coords in self.cities.items():
             if ", USA" not in city_name:
                 self.location_combo.addItem(city_name, coords)
         
         location_layout.addRow("Location:", self.location_combo)
+        
+        # Bbox name input
+        self.bbox_name_input = QLineEdit()
+        self.bbox_name_input.setText("BBox")
+        self.bbox_name_input.setPlaceholderText("Enter bounding box name")
+        location_layout.addRow("Bounding Box Name:", self.bbox_name_input)
         
         location_group.setLayout(location_layout)
         main_layout.addWidget(location_group)
@@ -151,7 +159,9 @@ class QuadBBoxCreatorTool(BaseTool):
         self.format_txt = QCheckBox("Text")
         
         self.format_kml.setChecked(True)
+        self.format_shp.setChecked(True)
         self.format_geojson.setChecked(True)
+        self.format_txt.setChecked(True)
         
         format_layout.addWidget(self.format_kml)
         format_layout.addWidget(self.format_shp)
@@ -251,6 +261,10 @@ class QuadBBoxCreatorTool(BaseTool):
         if coords is None:  # "-- Select City --" or separator
             return
         
+        # Update bbox name with city name
+        city_name = self.location_combo.currentText()
+        self.bbox_name_input.setText(city_name)
+        
         lon, lat = coords
         
         # Create a bounding box around the city (approximately 0.1 degrees = ~11 km)
@@ -302,7 +316,7 @@ class QuadBBoxCreatorTool(BaseTool):
             # Remove any extension
             file_path = Path(file_path).with_suffix("")
             self.output_path.setText(str(file_path))
-            self._save_last_path("output_file", file_path)
+            self._save_last_path("output_file", str(file_path))
     
     def _parse_boundaries(self) -> Optional[tuple]:
         """Parse and validate boundary inputs.
@@ -337,7 +351,7 @@ class QuadBBoxCreatorTool(BaseTool):
             # Already in UTM
             epsg_code = self.utm_epsg_input.text().strip()
             if not epsg_code:
-                return None, None
+                return [], ""
             # Create corners: NW, NE, SE, SW
             corners = [
                 (west, north),
@@ -425,9 +439,10 @@ class QuadBBoxCreatorTool(BaseTool):
             self.preview_area.setText(f"{area:.2f}")
             self.preview_perimeter.setText(f"{perimeter:.2f}")
             
-        except Exception:
-            # Silently fail for preview updates
-            pass
+        except Exception as e:
+            # Clear preview on error
+            self.preview_area.setText(f"Error: {str(e)}")
+            self.preview_perimeter.clear()
     
     def validate_inputs(self) -> bool:
         """Validate all inputs before creating the bounding box."""
@@ -517,15 +532,24 @@ class QuadBBoxCreatorTool(BaseTool):
         try:
             # Parse boundaries
             boundaries = self._parse_boundaries()
+            if not boundaries:
+                QMessageBox.warning(self, "Validation Error", "Please enter valid boundary values.")
+                return
             north, south, east, west = boundaries
             utm_corners, utm_epsg = self._boundaries_to_utm(north, south, east, west)
+            if not utm_corners or not utm_epsg:
+                QMessageBox.warning(self, "Validation Error", "Failed to convert coordinates to UTM. Please check your EPSG code.")
+                return
             
             # Create polygon
             polygon = Polygon(utm_corners)
             
+            # Get bbox name from input
+            bbox_name = self.bbox_name_input.text().strip() or "BBox"
+            
             # Create GeoDataFrame
             gdf = gpd.GeoDataFrame(
-                {"geometry": [polygon], "name": ["BBox"]},
+                {"geometry": [polygon], "name": [bbox_name]},
                 crs=utm_epsg
             )
             
@@ -534,7 +558,7 @@ class QuadBBoxCreatorTool(BaseTool):
             output_prefix.parent.mkdir(parents=True, exist_ok=True)
             
             # Save last path
-            self._save_last_path("output_file", output_prefix)
+            self._save_last_path("output_file", str(output_prefix))
             
             # Prepare output message
             results = []
@@ -650,8 +674,10 @@ class QuadBBoxCreatorTool(BaseTool):
                 f"Bounding box created successfully!\n\n{len(results)} file(s) exported."
             )
             
-            if self.window().statusBar():
-                self.window().statusBar().showMessage(
+            from PySide6.QtWidgets import QMainWindow
+            main_window = self.window()
+            if isinstance(main_window, QMainWindow) and main_window.statusBar():
+                main_window.statusBar().showMessage(
                     f"Bounding box created: {len(results)} format(s) exported",
                     5000
                 )
@@ -662,5 +688,7 @@ class QuadBBoxCreatorTool(BaseTool):
                 "Error",
                 f"Failed to create bounding box:\n{str(e)}"
             )
-            if self.window().statusBar():
-                self.window().statusBar().showMessage("Error creating bounding box", 5000)
+            from PySide6.QtWidgets import QMainWindow
+            main_window = self.window()
+            if isinstance(main_window, QMainWindow) and main_window.statusBar():
+                main_window.statusBar().showMessage("Error creating bounding box", 5000)

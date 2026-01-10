@@ -466,9 +466,12 @@ class BoundingBoxCreatorTool(BaseTool):
                 self.south_preview.setText(f"{miny_utm:.2f} m")
                 self.north_preview.setText(f"{maxy_utm:.2f} m")
             
-        except Exception:
-            # If calculation fails, clear preview
+        except Exception as e:
+            # If calculation fails, clear preview and log error
             self._clear_preview()
+            # Optionally log error for debugging (silently fail for user experience)
+            import logging
+            logging.debug(f"Preview calculation error: {e}")
     
     def _clear_preview(self):
         """Clear the bounding box preview fields."""
@@ -796,8 +799,10 @@ class BoundingBoxCreatorTool(BaseTool):
             )
             
             # Update status (if parent has status bar)
-            if self.window().statusBar():
-                self.window().statusBar().showMessage(
+            from PySide6.QtWidgets import QMainWindow
+            main_window = self.window()
+            if isinstance(main_window, QMainWindow) and main_window.statusBar():
+                main_window.statusBar().showMessage(
                     f"Created bounding box: {len(exported_files)} file(s) exported", 5000
                 )
                 
