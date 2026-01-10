@@ -29,9 +29,12 @@ from swissarmyknifegis.core.cities import get_major_cities
 class QuadBBoxCreatorTool(BaseTool):
     """Tool for creating bounding boxes from four arbitrary corner points."""
     
-    def __init__(self):
+    # Default offset for city-based bounding boxes (approximately 0.1 degrees = ~11 km)
+    DEFAULT_CITY_BBOX_OFFSET_DEGREES = 0.1
+    
+    def __init__(self, parent=None):
         self.cities = get_major_cities()
-        super().__init__()
+        super().__init__(parent)
         
     def get_tool_name(self) -> str:
         return "BBox - Points"
@@ -40,11 +43,6 @@ class QuadBBoxCreatorTool(BaseTool):
         """Set up the user interface for the 4-point bounding box creator."""
         main_layout = QVBoxLayout(self)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        
-        # Title
-        title = QLabel("Create Bounding Box from Boundaries")
-        title.setStyleSheet("font-size: 14pt; font-weight: bold;")
-        main_layout.addWidget(title)
         
         # Coordinate System Selection
         coord_system_group = QGroupBox("Coordinate System")
@@ -71,6 +69,18 @@ class QuadBBoxCreatorTool(BaseTool):
         self.utm_epsg_input.setPlaceholderText("e.g., 32632 for UTM Zone 32N")
         self.utm_epsg_input.setValidator(QIntValidator(32601, 32760))
         utm_zone_layout.addRow("EPSG Code:", self.utm_epsg_input)
+        
+        # UTM rounding option (only for UTM input)
+        self.utm_rounding_combo = QComboBox()
+        self.utm_rounding_combo.addItem("No rounding", None)
+        self.utm_rounding_combo.addItem("Round to nearest 10 m", 10)
+        self.utm_rounding_combo.addItem("Round to nearest 100 m", 100)
+        self.utm_rounding_combo.addItem("Round to nearest 1,000 m", 1000)
+        self.utm_rounding_combo.addItem("Round to nearest 10,000 m", 10000)
+        self.utm_rounding_combo.setEnabled(False)
+        self.utm_rounding_combo.currentIndexChanged.connect(self._on_utm_rounding_changed)
+        self.utm_rounding_label = QLabel("Round Boundaries:")
+        utm_zone_layout.addRow(self.utm_rounding_label, self.utm_rounding_combo)
         
         self.utm_zone_group.setLayout(utm_zone_layout)
         self.utm_zone_group.setVisible(False)
@@ -129,6 +139,39 @@ class QuadBBoxCreatorTool(BaseTool):
         bounds_group.setLayout(bounds_layout)
         main_layout.addWidget(bounds_group)
         
+        # Preview Section
+        preview_group = QGroupBox("Preview")
+        preview_layout = QFormLayout()
+        
+        self.preview_centroid_x = QLineEdit()
+        self.preview_centroid_x.setReadOnly(True)
+        self.preview_centroid_x.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
+        self.preview_centroid_y = QLineEdit()
+        self.preview_centroid_y.setReadOnly(True)
+        self.preview_centroid_y.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
+        self.preview_width = QLineEdit()
+        self.preview_width.setReadOnly(True)
+        self.preview_width.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
+        self.preview_height = QLineEdit()
+        self.preview_height.setReadOnly(True)
+        self.preview_height.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
+        self.preview_area = QLineEdit()
+        self.preview_area.setReadOnly(True)
+        self.preview_area.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
+        self.preview_perimeter = QLineEdit()
+        self.preview_perimeter.setReadOnly(True)
+        self.preview_perimeter.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
+        
+        preview_layout.addRow("Centroid X (m):", self.preview_centroid_x)
+        preview_layout.addRow("Centroid Y (m):", self.preview_centroid_y)
+        preview_layout.addRow("Width (m):", self.preview_width)
+        preview_layout.addRow("Height (m):", self.preview_height)
+        preview_layout.addRow("Area (m²):", self.preview_area)
+        preview_layout.addRow("Perimeter (m):", self.preview_perimeter)
+        
+        preview_group.setLayout(preview_layout)
+        main_layout.addWidget(preview_group)
+        
         # Output Settings
         output_group = QGroupBox("Output Settings")
         output_layout = QVBoxLayout()
@@ -137,7 +180,7 @@ class QuadBBoxCreatorTool(BaseTool):
         path_layout = QHBoxLayout()
         self.output_path = QLineEdit()
         self.output_path.setPlaceholderText("Output path prefix (without extension)")
-        last_path = self._get_last_path("output_file")
+        last_path = self._get_last_path("paths/bbox_creator/output_file")
         if last_path:
             self.output_path.setText(str(last_path))
         
@@ -156,7 +199,7 @@ class QuadBBoxCreatorTool(BaseTool):
         self.format_kml = QCheckBox("KML")
         self.format_shp = QCheckBox("Shapefile")
         self.format_geojson = QCheckBox("GeoJSON")
-        self.format_txt = QCheckBox("Text")
+        self.format_txt = QCheckBox("Text File")
         
         self.format_kml.setChecked(True)
         self.format_shp.setChecked(True)
@@ -182,56 +225,22 @@ class QuadBBoxCreatorTool(BaseTool):
         output_layout.addLayout(format_layout2)
         
         # Keep UTM projection option
-        self.keep_utm = QCheckBox("Keep UTM projection (default: convert to WGS84)")
+        self.keep_utm = QCheckBox("Keep UTM projection (where possible)")
+        self.keep_utm.setChecked(True)
+        self.keep_utm.setToolTip(
+            "When checked, exports Shapefile, GeoJSON, GeoPackage, GML, and MapInfo TAB in UTM projection.\n"
+            "KML and KMZ always use WGS84. When unchecked, all formats use WGS84."
+        )
         output_layout.addWidget(self.keep_utm)
         
         output_group.setLayout(output_layout)
         main_layout.addWidget(output_group)
-        
-        # Preview Section
-        preview_group = QGroupBox("Preview")
-        preview_layout = QFormLayout()
-        
-        self.preview_minx = QLineEdit()
-        self.preview_minx.setReadOnly(True)
-        self.preview_miny = QLineEdit()
-        self.preview_miny.setReadOnly(True)
-        self.preview_maxx = QLineEdit()
-        self.preview_maxx.setReadOnly(True)
-        self.preview_maxy = QLineEdit()
-        self.preview_maxy.setReadOnly(True)
-        self.preview_area = QLineEdit()
-        self.preview_area.setReadOnly(True)
-        self.preview_perimeter = QLineEdit()
-        self.preview_perimeter.setReadOnly(True)
-        
-        preview_layout.addRow("Min X:", self.preview_minx)
-        preview_layout.addRow("Min Y:", self.preview_miny)
-        preview_layout.addRow("Max X:", self.preview_maxx)
-        preview_layout.addRow("Max Y:", self.preview_maxy)
-        preview_layout.addRow("Area (m²):", self.preview_area)
-        preview_layout.addRow("Perimeter (m):", self.preview_perimeter)
-        
-        preview_group.setLayout(preview_layout)
-        main_layout.addWidget(preview_group)
         
         # Create Bounding Box Button
         self.create_button = QPushButton("Create Bounding Box")
         self.create_button.setMinimumHeight(40)
         self.create_button.clicked.connect(self._create_bbox)
         main_layout.addWidget(self.create_button)
-        
-        # Results Display
-        results_group = QGroupBox("Results")
-        results_layout = QVBoxLayout()
-        
-        self.results_text = QTextEdit()
-        self.results_text.setReadOnly(True)
-        self.results_text.setMaximumHeight(150)
-        results_layout.addWidget(self.results_text)
-        
-        results_group.setLayout(results_layout)
-        main_layout.addWidget(results_group)
         
         # Stretch to push everything to the top
         main_layout.addStretch()
@@ -250,9 +259,95 @@ class QuadBBoxCreatorTool(BaseTool):
         self.utm_epsg_input.textChanged.connect(self._update_preview)
         
     def _on_coord_system_changed(self):
-        """Handle coordinate system radio button changes."""
+        """Handle coordinate system radio button changes and convert existing coordinates."""
         self.utm_zone_group.setVisible(self.utm_radio.isChecked())
+        
+        # Try to convert existing boundary values when switching modes
+        boundaries = self._parse_boundaries()
+        if boundaries:
+            north, south, east, west = boundaries
+            
+            if self.utm_radio.isChecked():
+                # Switching to UTM mode - convert from Lon/Lat
+                try:
+                    # Determine UTM zone from center of bbox
+                    center_lon = (east + west) / 2
+                    center_lat = (north + south) / 2
+                    utm_zone = int((center_lon + 180) / 6) + 1
+                    
+                    if center_lat >= 0:
+                        epsg_code = f"EPSG:{32600 + utm_zone}"
+                    else:
+                        epsg_code = f"EPSG:{32700 + utm_zone}"
+                    
+                    self.utm_epsg_input.setText(str(32600 + utm_zone) if center_lat >= 0 else str(32700 + utm_zone))
+                    
+                    # Transform corners to UTM
+                    transformer = Transformer.from_crs("EPSG:4326", epsg_code, always_xy=True)
+                    nw_x, nw_y = transformer.transform(west, north)
+                    ne_x, ne_y = transformer.transform(east, north)
+                    se_x, se_y = transformer.transform(east, south)
+                    sw_x, sw_y = transformer.transform(west, south)
+                    
+                    # Display boundaries in UTM
+                    self.north_input.setText(f"{max(nw_y, ne_y):.2f}")
+                    self.south_input.setText(f"{min(se_y, sw_y):.2f}")
+                    self.east_input.setText(f"{max(ne_x, se_x):.2f}")
+                    self.west_input.setText(f"{min(nw_x, sw_x):.2f}")
+                except Exception:
+                    # If conversion fails, skip it but still update preview
+                    pass
+            else:
+                # Switching to Lon/Lat mode - convert from UTM
+                epsg_text = self.utm_epsg_input.text().strip()
+                if epsg_text:
+                    try:
+                        epsg_code = f"EPSG:{epsg_text}"
+                        transformer = Transformer.from_crs(epsg_code, "EPSG:4326", always_xy=True)
+                        
+                        # Transform corners from UTM to Lon/Lat
+                        nw_lon, nw_lat = transformer.transform(west, north)
+                        ne_lon, ne_lat = transformer.transform(east, north)
+                        se_lon, se_lat = transformer.transform(east, south)
+                        sw_lon, sw_lat = transformer.transform(west, south)
+                        
+                        # Display boundaries in Lon/Lat
+                        self.north_input.setText(f"{max(nw_lat, ne_lat):.6f}")
+                        self.south_input.setText(f"{min(se_lat, sw_lat):.6f}")
+                        self.east_input.setText(f"{max(ne_lon, se_lon):.6f}")
+                        self.west_input.setText(f"{min(nw_lon, sw_lon):.6f}")
+                    except Exception:
+                        # If conversion fails, clear EPSG and don't convert coordinates
+                        self.utm_epsg_input.clear()
+        
         self._update_preview()
+    
+    def _on_utm_rounding_changed(self, index: int):
+        """Handle UTM boundary rounding selection change."""
+        rounding_value = self.utm_rounding_combo.currentData()
+        
+        if rounding_value is None or not self.utm_radio.isChecked():
+            # No rounding or not in UTM mode
+            return
+        
+        # Get current values
+        boundaries = self._parse_boundaries()
+        if not boundaries:
+            return
+        
+        north, south, east, west = boundaries
+        
+        # Round to nearest value
+        north = round(north / rounding_value) * rounding_value
+        south = round(south / rounding_value) * rounding_value
+        east = round(east / rounding_value) * rounding_value
+        west = round(west / rounding_value) * rounding_value
+        
+        # Update values
+        self.north_input.setText(f"{north:.2f}")
+        self.south_input.setText(f"{south:.2f}")
+        self.east_input.setText(f"{east:.2f}")
+        self.west_input.setText(f"{west:.2f}")
     
     def _on_location_selected(self, index: int):
         """Handle city selection from dropdown."""
@@ -267,8 +362,8 @@ class QuadBBoxCreatorTool(BaseTool):
         
         lon, lat = coords
         
-        # Create a bounding box around the city (approximately 0.1 degrees = ~11 km)
-        offset = 0.1
+        # Create a bounding box around the city
+        offset = self.DEFAULT_CITY_BBOX_OFFSET_DEGREES
         north = lat + offset
         south = lat - offset
         east = lon + offset
@@ -308,7 +403,7 @@ class QuadBBoxCreatorTool(BaseTool):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Select Output Path",
-            str(self._get_last_path("output_file") or Path.home()),
+            str(self._get_last_path("paths/bbox_creator/output_file") or Path.home()),
             "All Files (*)"
         )
         
@@ -316,7 +411,7 @@ class QuadBBoxCreatorTool(BaseTool):
             # Remove any extension
             file_path = Path(file_path).with_suffix("")
             self.output_path.setText(str(file_path))
-            self._save_last_path("output_file", str(file_path))
+            self._save_last_path("paths/bbox_creator/output_file", str(file_path))
     
     def _parse_boundaries(self) -> Optional[tuple]:
         """Parse and validate boundary inputs.
@@ -392,10 +487,10 @@ class QuadBBoxCreatorTool(BaseTool):
         
         if not boundaries:
             # Clear preview
-            self.preview_minx.clear()
-            self.preview_miny.clear()
-            self.preview_maxx.clear()
-            self.preview_maxy.clear()
+            self.preview_centroid_x.clear()
+            self.preview_centroid_y.clear()
+            self.preview_width.clear()
+            self.preview_height.clear()
             self.preview_area.clear()
             self.preview_perimeter.clear()
             return
@@ -427,15 +522,19 @@ class QuadBBoxCreatorTool(BaseTool):
             # Get bounds
             minx, miny, maxx, maxy = polygon.bounds
             
-            # Calculate area and perimeter
+            # Calculate centroid, dimensions, area and perimeter
+            centroid_x = (minx + maxx) / 2
+            centroid_y = (miny + maxy) / 2
+            width = maxx - minx
+            height = maxy - miny
             area = polygon.area
             perimeter = polygon.length
             
             # Update preview fields
-            self.preview_minx.setText(f"{minx:.2f}")
-            self.preview_miny.setText(f"{miny:.2f}")
-            self.preview_maxx.setText(f"{maxx:.2f}")
-            self.preview_maxy.setText(f"{maxy:.2f}")
+            self.preview_centroid_x.setText(f"{centroid_x:.2f}")
+            self.preview_centroid_y.setText(f"{centroid_y:.2f}")
+            self.preview_width.setText(f"{width:.2f}")
+            self.preview_height.setText(f"{height:.2f}")
             self.preview_area.setText(f"{area:.2f}")
             self.preview_perimeter.setText(f"{perimeter:.2f}")
             
@@ -558,7 +657,7 @@ class QuadBBoxCreatorTool(BaseTool):
             output_prefix.parent.mkdir(parents=True, exist_ok=True)
             
             # Save last path
-            self._save_last_path("output_file", str(output_prefix))
+            self._save_last_path("paths/bbox_creator/output_file", str(output_prefix))
             
             # Prepare output message
             results = []
@@ -582,10 +681,12 @@ class QuadBBoxCreatorTool(BaseTool):
             
             if self.format_gpkg.isChecked():
                 gpkg_path = output_prefix.with_suffix(".gpkg")
+                # Sanitize layer name (replace spaces and special chars)
+                layer_name = bbox_name.replace(" ", "_").replace(",", "")
                 if self.keep_utm.isChecked():
-                    gdf.to_file(gpkg_path, driver="GPKG", layer="bbox")
+                    gdf.to_file(gpkg_path, driver="GPKG", layer=layer_name)
                 else:
-                    gdf.to_crs("EPSG:4326").to_file(gpkg_path, driver="GPKG", layer="bbox")
+                    gdf.to_crs("EPSG:4326").to_file(gpkg_path, driver="GPKG", layer=layer_name)
                 results.append(f"GeoPackage: {gpkg_path}")
             
             if self.format_gml.isChecked():
@@ -634,40 +735,82 @@ class QuadBBoxCreatorTool(BaseTool):
                 area = polygon.area
                 perimeter = polygon.length
                 
-                with open(txt_path, 'w') as f:
-                    f.write("Bounding Box Details\n")
-                    f.write("=" * 50 + "\n\n")
-                    
-                    f.write("Boundaries:\n")
-                    f.write(f"  North: {north}\n")
-                    f.write(f"  South: {south}\n")
-                    f.write(f"  East: {east}\n")
-                    f.write(f"  West: {west}\n")
-                    
-                    f.write(f"\nCoordinate System: {utm_epsg}\n")
-                    f.write(f"\nBounding Box Extents (UTM):\n")
-                    f.write(f"  Min X: {minx:.2f}\n")
-                    f.write(f"  Min Y: {miny:.2f}\n")
-                    f.write(f"  Max X: {maxx:.2f}\n")
-                    f.write(f"  Max Y: {maxy:.2f}\n")
-                    f.write(f"\nArea: {area:.2f} m²\n")
-                    f.write(f"Perimeter: {perimeter:.2f} m\n")
-                    
-                    # If converted to WGS84, add those coordinates
-                    if not self.keep_utm.isChecked():
-                        gdf_wgs84 = gdf.to_crs("EPSG:4326")
-                        poly_wgs84 = gdf_wgs84.geometry.iloc[0]
-                        coords_wgs84 = list(poly_wgs84.exterior.coords)[:-1]  # Remove duplicate last point
-                        
-                        f.write("\nCorner Points (WGS84):\n")
-                        for i, (lon, lat) in enumerate(coords_wgs84, 1):
-                            f.write(f"  Point {i}: ({lon:.6f}, {lat:.6f})\n")
+                # Get WGS84 bounds for display
+                gdf_wgs84 = gdf.to_crs("EPSG:4326")
+                wgs84_bounds = gdf_wgs84.total_bounds
+                wgs84_poly = gdf_wgs84.geometry.iloc[0]
+                
+                # Build text content in comprehensive format
+                txt_content = []
+                txt_content.append("========================================")
+                txt_content.append("   BOUNDING BOX PARAMETERS")
+                txt_content.append("========================================")
+                txt_content.append("")
+                
+                # Input boundaries section
+                txt_content.append("--- INPUT BOUNDARIES ---")
+                txt_content.append("")
+                txt_content.append(f"North: {north}")
+                txt_content.append(f"South: {south}")
+                txt_content.append(f"East: {east}")
+                txt_content.append(f"West: {west}")
+                txt_content.append("")
+                
+                # Bounding box extents section
+                txt_content.append("--- BOUNDING BOX EXTENTS ---")
+                txt_content.append("")
+                txt_content.append(f"UTM ({utm_epsg}):")
+                txt_content.append(f"  Min X (West):  {minx:.2f} m")
+                txt_content.append(f"  Max X (East):  {maxx:.2f} m")
+                txt_content.append(f"  Min Y (South): {miny:.2f} m")
+                txt_content.append(f"  Max Y (North): {maxy:.2f} m")
+                txt_content.append("")
+                txt_content.append("WGS84 (EPSG:4326):")
+                txt_content.append(f"  Min Lon (West):  {wgs84_bounds[0]:.6f}°")
+                txt_content.append(f"  Max Lon (East):  {wgs84_bounds[2]:.6f}°")
+                txt_content.append(f"  Min Lat (South): {wgs84_bounds[1]:.6f}°")
+                txt_content.append(f"  Max Lat (North): {wgs84_bounds[3]:.6f}°")
+                txt_content.append("")
+                
+                # Size and geometry section
+                txt_content.append("--- SIZE AND GEOMETRY ---")
+                txt_content.append("")
+                txt_content.append(f"Area:       {area:.2f} m² ({area/1e6:.4f} km²)")
+                txt_content.append(f"Perimeter:  {perimeter:.2f} m ({perimeter/1e3:.4f} km)")
+                txt_content.append("")
+                
+                # CRS information section
+                txt_content.append("--- COORDINATE REFERENCE SYSTEM ---")
+                txt_content.append("")
+                txt_content.append(f"Input CRS:  {'WGS84 (EPSG:4326)' if self.lonlat_radio.isChecked() else f'UTM ({utm_epsg})'}")
+                txt_content.append(f"Output CRS: {('UTM ' + utm_epsg) if self.keep_utm.isChecked() else 'WGS84 (EPSG:4326)'}")
+                txt_content.append(f"UTM Zone:   {utm_epsg}")
+                txt_content.append("")
+                
+                # Configuration section
+                txt_content.append("--- CONFIGURATION ---")
+                txt_content.append("")
+                txt_content.append(f"Bounding Box Name: {bbox_name}")
+                txt_content.append(f"Input Method:      Point boundaries")
+                txt_content.append(f"Keep UTM Projection: {'Yes' if self.keep_utm.isChecked() else 'No'}")
+                txt_content.append("")
+                
+                # Corner points section
+                txt_content.append("--- CORNER POINTS (WGS84) ---")
+                txt_content.append("")
+                coords_wgs84 = list(wgs84_poly.exterior.coords)[:-1]  # Remove duplicate last point
+                for i, (lon, lat) in enumerate(coords_wgs84, 1):
+                    txt_content.append(f"  Point {i}: ({lon:.6f}, {lat:.6f})")
+                txt_content.append("")
+                txt_content.append("========================================")
+                
+                # Write to file
+                with open(txt_path, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(txt_content))
                 
                 results.append(f"Text: {txt_path}")
             
-            # Display results
-            self.results_text.setPlainText("\n".join(results))
-            
+            # Show success message
             QMessageBox.information(
                 self,
                 "Success",

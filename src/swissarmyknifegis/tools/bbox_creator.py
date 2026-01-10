@@ -186,6 +186,17 @@ class BoundingBoxCreatorTool(BaseTool):
         self.north_preview.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
         preview_layout.addRow(self.north_label, self.north_preview)
         
+        # Area and perimeter fields
+        self.area_preview = QLineEdit()
+        self.area_preview.setReadOnly(True)
+        self.area_preview.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
+        preview_layout.addRow("Area (m²):", self.area_preview)
+        
+        self.perimeter_preview = QLineEdit()
+        self.perimeter_preview.setReadOnly(True)
+        self.perimeter_preview.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
+        preview_layout.addRow("Perimeter (m):", self.perimeter_preview)
+        
         main_layout.addWidget(self.preview_group)
         
         # Output Settings Group
@@ -430,6 +441,12 @@ class BoundingBoxCreatorTool(BaseTool):
                 self.south_preview.setText(f"{south:.6f}°")
                 self.north_preview.setText(f"{north:.6f}°")
                 
+                # Calculate and display area and perimeter
+                area = width_m * height_m
+                perimeter = 2 * (width_m + height_m)
+                self.area_preview.setText(f"{area:.2f} m² ({area/1e6:.4f} km²)")
+                self.perimeter_preview.setText(f"{perimeter:.2f} m ({perimeter/1e3:.4f} km)")
+                
             else:
                 # UTM mode - show UTM extents
                 # Validate EPSG code first
@@ -465,6 +482,12 @@ class BoundingBoxCreatorTool(BaseTool):
                 self.east_preview.setText(f"{maxx_utm:.2f} m")
                 self.south_preview.setText(f"{miny_utm:.2f} m")
                 self.north_preview.setText(f"{maxy_utm:.2f} m")
+                
+                # Calculate and display area and perimeter
+                area = width_m * height_m
+                perimeter = 2 * (width_m + height_m)
+                self.area_preview.setText(f"{area:.2f} m² ({area/1e6:.4f} km²)")
+                self.perimeter_preview.setText(f"{perimeter:.2f} m ({perimeter/1e3:.4f} km)")
             
         except Exception as e:
             # If calculation fails, clear preview and log error
