@@ -140,3 +140,207 @@ class BaseTool(QWidget, metaclass=QABCMeta):
             'min': gdalconst.GRA_Min,
         }
         return resampling_map.get(resampling_name.lower(), gdalconst.GRA_Bilinear)
+    
+    def _update_status(self, message: str, timeout_ms: int = 5000) -> None:
+        """Update the main window status bar with a message.
+        
+        Safely updates the status bar if the main window has one.
+        
+        Args:
+            message: Message to display in the status bar
+            timeout_ms: How long to display the message in milliseconds (default 5000)
+        """
+        from PySide6.QtWidgets import QMainWindow
+        main_window = self.window()
+        if isinstance(main_window, QMainWindow) and main_window.statusBar():
+            main_window.statusBar().showMessage(message, timeout_ms)
+    
+    @staticmethod
+    def sanitize_layer_name(name: str) -> str:
+        """Sanitize a name for use as a layer name in GIS formats.
+        
+        Replaces spaces with underscores and removes special characters
+        that may cause issues in layer names.
+        
+        Args:
+            name: Original name
+            
+        Returns:
+            Sanitized name safe for use as layer name
+        """
+        return name.replace(" ", "_").replace(",", "").replace("(", "").replace(")", "")
+    
+    def _confirm_overwrite(self, file_path: str) -> bool:
+        """Ask user for confirmation before overwriting an existing file.
+        
+        Args:
+            file_path: Path to the file that may be overwritten
+            
+        Returns:
+            True if user confirms or file doesn't exist, False otherwise
+        """
+        from PySide6.QtWidgets import QMessageBox
+        
+        if not Path(file_path).exists():
+            return True
+        
+        reply = QMessageBox.question(
+            self,
+            "File Exists",
+            f"File already exists:\n{Path(file_path).name}\n\nOverwrite?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        return reply == QMessageBox.Yes
+    
+    def _safe_create_directory(self, dir_path: str) -> bool:
+        """Safely create a directory with comprehensive error handling.
+        
+        Args:
+            dir_path: Path to the directory to create
+            
+        Returns:
+            True if successful, False otherwise (error message shown to user)
+        """
+        from PySide6.QtWidgets import QMessageBox
+        import errno
+        
+        try:
+            Path(dir_path).mkdir(parents=True, exist_ok=True)
+            return True
+            
+        except PermissionError:
+            QMessageBox.critical(
+                self,
+                "Permission Denied",
+                f"Cannot create directory:\n{dir_path}\n\nCheck folder permissions."
+            )
+            return False
+            
+        except OSError as e:
+            if e.errno == errno.ENOSPC:
+                QMessageBox.critical(
+                    self,
+                    "Disk Full",
+                    "Not enough disk space to create directory."
+                )
+            else:
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to create directory:\n{str(e)}"
+                )
+            return False
+    
+    def _check_disk_space(self, output_path: str, estimated_size_bytes: int) -> bool:
+        """Check if enough disk space is available for operation.
+        
+        Args:
+            output_path: Path where output will be written
+            estimated_size_bytes: Estimated size of output in bytes
+            
+        Returns:
+            True if sufficient space available, False otherwise
+        """
+        from PySide6.QtWidgets import QMessageBox
+        import shutil
+        
+        try:
+            # Get disk usage statistics
+            stat = shutil.disk_usage(Path(output_path).parent)
+            
+            # Require 20% buffer over estimated size
+            required_space = estimated_size_bytes * 1.2
+            
+            if stat.free < required_space:
+                QMessageBox.warning(
+                    self,
+                    "Insufficient Disk Space",
+                    f"Estimated output size: {estimated_size_bytes / (1024**3):.2f} GB\n"
+                    f"Available space: {stat.free / (1024**3):.2f} GB\n\n"
+                    f"Free up disk space before continuing."
+                )
+                return False
+            
+            return True
+            
+        except Exception as e:
+            # If we can't check disk space, allow operation to proceed
+            # (better than blocking legitimate operations)
+            return True
+    
+    def _validate_output_path(self, path: str) -> bool:
+        """Validate that the output path is writable.
+        
+        Args:
+            path: Output file path to validate
+            
+        Returns:
+            True if path is writable, False otherwise
+        """
+        from PySide6.QtWidgets import QMessageBox
+        
+        try:
+            # Ensure parent directory exists
+            parent = Path(path).parent
+            parent.mkdir(parents=True, exist_ok=True)
+            
+            # Test write access by creating and deleting a test file
+            test_file = parent / ".write_test_swissgis"
+            test_file.touch()
+            test_file.unlink()
+            
+            return True
+            
+        except PermissionError:
+            QMessageBox.critical(
+                self,
+                "Permission Denied",
+                f"Cannot write to location:\n{path}\n\nCheck folder permissions."
+            )
+            return False
+            
+        except OSError as e:
+            QMessageBox.critical(
+                self,
+                "Cannot Write",
+                f"Cannot write to:\n{path}\n\n{str(e)}"
+            )
+            return False
+    
+    def _display_success(self, message: str):
+        """Display a success message in results display (if available).
+        
+        Args:
+            message: Success message to display
+        """
+        if hasattr(self, 'results_display'):
+            self.results_display.append(f"✓ {message}")
+    
+    def _display_error(self, message: str):
+        """Display an error message in results display (if available).
+        
+        Args:
+            message: Error message to display
+        """
+        if hasattr(self, 'results_display'):
+            self.results_display.append(f"✗ {message}")
+    
+    def _display_warning(self, message: str):
+        """Display a warning message in results display (if available).
+        
+        Args:
+            message: Warning message to display
+        """
+        if hasattr(self, 'results_display'):
+            self.results_display.append(f"⚠ {message}")
+    
+    def _display_info(self, message: str):
+        """Display an info message in results display (if available).
+        
+        Args:
+            message: Info message to display
+        """
+        if hasattr(self, 'results_display'):
+            self.results_display.append(f"ℹ {message}")
