@@ -792,10 +792,10 @@ class RasterMergerTool(BaseTool):
 
     def _on_merge(self):
         """Perform the raster merge operation."""
-        if self.analysis_results is None:
-            QMessageBox.warning(self, "Error", "Please run Analyze first")
+        # Validate inputs before proceeding
+        if not self.validate_inputs():
             return
-
+        
         try:
             self.results_display.append("\n" + "=" * 50)
             self.results_display.append("Starting merge operation...")
@@ -943,3 +943,83 @@ class RasterMergerTool(BaseTool):
 
             self.results_display.append(traceback.format_exc())
             QMessageBox.critical(self, "Error", f"Merge failed:\n{str(e)}")
+    
+    def validate_inputs(self) -> bool:
+        """Validate user inputs before merging rasters.
+        
+        Returns:
+            True if inputs are valid, False otherwise
+        """
+        # Check if files are loaded
+        if not self.loaded_files:
+            QMessageBox.warning(
+                self,
+                "Validation Error",
+                "No raster files loaded. Please add files to merge."
+            )
+            return False
+        
+        # Check if analysis has been performed
+        if not self.analysis_results:
+            QMessageBox.warning(
+                self,
+                "Validation Error",
+                "Please analyze rasters before merging."
+            )
+            return False
+        
+        # Check if output filename is specified
+        output_filename = self.output_filename_input.text().strip()
+        if not output_filename:
+            QMessageBox.warning(
+                self,
+                "Validation Error",
+                "Please specify an output filename."
+            )
+            return False
+        
+        # Check if output directory is specified and exists
+        if not self.output_directory or not os.path.exists(self.output_directory):
+            QMessageBox.warning(
+                self,
+                "Validation Error",
+                "Please select a valid output directory."
+            )
+            return False
+        
+        # Validate output directory is writable
+        if not self._validate_output_path(os.path.join(self.output_directory, output_filename)):
+            return False
+        
+        # Validate NoData value compatibility with data type
+        if not self.nodata_none_checkbox.isChecked():
+            nodata_text = self.nodata_value_input.text().strip()
+            if nodata_text:
+                try:
+                    nodata_value = float(nodata_text)
+                    datatype_text = self.datatype_combo.currentText()
+                    output_dtype = next(
+                        k for k, v in self.datatype_options.items() 
+                        if v == datatype_text
+                    )
+                    
+                    # Check compatibility
+                    if output_dtype.startswith('int') or output_dtype.startswith('uint'):
+                        if nodata_value != int(nodata_value):
+                            QMessageBox.warning(
+                                self,
+                                "Validation Error",
+                                f"NoData value {nodata_value} is not compatible with integer data type {output_dtype}.\n"
+                                "Please use an integer value."
+                            )
+                            return False
+                except ValueError:
+                    QMessageBox.warning(
+                        self,
+                        "Validation Error",
+                        "NoData value must be a valid number."
+                    )
+                    return False
+        
+        return True
+

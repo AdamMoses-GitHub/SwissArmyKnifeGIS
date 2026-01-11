@@ -16,10 +16,14 @@ from PySide6.QtWidgets import (
 
 import geopandas as gpd
 from shapely.geometry import box
-from pyproj import Transformer, CRS
+from pyproj import CRS
 
 from swissarmyknifegis.tools.base_tool import BaseTool
 from swissarmyknifegis.core.cities import get_major_cities, populate_city_combo
+from swissarmyknifegis.core.coord_utils import (
+    calculate_utm_epsg, validate_utm_epsg, wgs84_to_utm, utm_to_wgs84, transform_coordinates
+)
+from swissarmyknifegis.core.geo_export_utils import export_geodataframe_multi
 
 
 class BoundingBoxCreatorTool(BaseTool):
@@ -345,11 +349,7 @@ class BoundingBoxCreatorTool(BaseTool):
             # Check if EPSG code is valid
             if not self.utm_zone_input.text().strip():
                 # No EPSG code, calculate it from the city coordinates
-                utm_zone = int((lon + 180) / 6) + 1
-                if lat >= 0:
-                    utm_epsg = 32600 + utm_zone
-                else:
-                    utm_epsg = 32700 + utm_zone
+                utm_epsg = calculate_utm_epsg(lon, lat)
                 self.utm_zone_input.setText(str(utm_epsg))
             else:
                 # Use existing EPSG code
@@ -357,20 +357,11 @@ class BoundingBoxCreatorTool(BaseTool):
                     utm_epsg = int(self.utm_zone_input.text())
                 except ValueError:
                     # Invalid EPSG, calculate from coordinates
-                    utm_zone = int((lon + 180) / 6) + 1
-                    if lat >= 0:
-                        utm_epsg = 32600 + utm_zone
-                    else:
-                        utm_epsg = 32700 + utm_zone
+                    utm_epsg = calculate_utm_epsg(lon, lat)
                     self.utm_zone_input.setText(str(utm_epsg))
             
             # Transform from WGS84 to UTM
-            transformer = Transformer.from_crs(
-                "EPSG:4326",
-                f"EPSG:{utm_epsg}",
-                always_xy=True
-            )
-            utm_x, utm_y = transformer.transform(lon, lat)
+            utm_x, utm_y = transform_coordinates(lon, lat, "EPSG:4326", f"EPSG:{utm_epsg}")
             
             # Set the UTM coordinates
             self.x_coord_input.setValue(utm_x)
@@ -402,17 +393,11 @@ class BoundingBoxCreatorTool(BaseTool):
                 maxy_utm = utm_y + height_m / 2.0
                 
                 # Transform corners to WGS84
-                transformer = Transformer.from_crs(
-                    f"EPSG:{utm_epsg}",
-                    "EPSG:4326",
-                    always_xy=True
-                )
-                
                 # Transform all four corners
-                sw_lon, sw_lat = transformer.transform(minx_utm, miny_utm)
-                se_lon, se_lat = transformer.transform(maxx_utm, miny_utm)
-                nw_lon, nw_lat = transformer.transform(minx_utm, maxy_utm)
-                ne_lon, ne_lat = transformer.transform(maxx_utm, maxy_utm)
+                sw_lon, sw_lat = transform_coordinates(minx_utm, miny_utm, f"EPSG:{utm_epsg}", "EPSG:4326")
+                se_lon, se_lat = transform_coordinates(maxx_utm, miny_utm, f"EPSG:{utm_epsg}", "EPSG:4326")
+                nw_lon, nw_lat = transform_coordinates(minx_utm, maxy_utm, f"EPSG:{utm_epsg}", "EPSG:4326")
+                ne_lon, ne_lat = transform_coordinates(maxx_utm, maxy_utm, f"EPSG:{utm_epsg}", "EPSG:4326")
                 
                 # Get min/max from corners (in case of distortion)
                 west = min(sw_lon, se_lon, nw_lon, ne_lon)
@@ -440,7 +425,8 @@ class BoundingBoxCreatorTool(BaseTool):
                     return
                 try:
                     epsg_code = int(self.utm_zone_input.text())
-                    if not ((32601 <= epsg_code <= 32660) or (32701 <= epsg_code <= 32760)):
+                    is_valid, _ = validate_utm_epsg(epsg_code)
+                    if not is_valid:
                         self._clear_preview()
                         return
                 except ValueError:
@@ -510,14 +496,10 @@ class BoundingBoxCreatorTool(BaseTool):
             if self.utm_zone_input.text().strip():
                 try:
                     utm_epsg = int(self.utm_zone_input.text())
-                    if (32601 <= utm_epsg <= 32660) or (32701 <= utm_epsg <= 32760):
+                    is_valid, _ = validate_utm_epsg(utm_epsg)
+                    if is_valid:
                         # Valid UTM EPSG code, convert coordinates
-                        transformer = Transformer.from_crs(
-                            f"EPSG:{utm_epsg}",
-                            "EPSG:4326",
-                            always_xy=True
-                        )
-                        lon, lat = transformer.transform(current_x, current_y)
+                        lon, lat = utm_to_wgs84(current_x, current_y, utm_epsg)
                         self.x_coord_input.setValue(lon)
                         self.y_coord_input.setValue(lat)
                         return
@@ -546,25 +528,16 @@ class BoundingBoxCreatorTool(BaseTool):
             
             # Convert Lon/Lat to UTM
             try:
-                # Determine UTM zone from longitude
-                utm_zone = int((current_lon + 180) / 6) + 1
-                
-                # Determine hemisphere and EPSG code
-                if current_lat >= 0:
-                    utm_epsg = 32600 + utm_zone
-                else:
-                    utm_epsg = 32700 + utm_zone
+                # Calculate UTM EPSG from coordinates
+                utm_epsg = calculate_utm_epsg(current_lon, current_lat)
                 
                 # Set EPSG code
                 self.utm_zone_input.setText(str(utm_epsg))
                 
                 # Transform coordinates
-                transformer = Transformer.from_crs(
-                    "EPSG:4326",
-                    f"EPSG:{utm_epsg}",
-                    always_xy=True
+                utm_x, utm_y = transform_coordinates(
+                    current_lon, current_lat, "EPSG:4326", f"EPSG:{utm_epsg}"
                 )
-                utm_x, utm_y = transformer.transform(current_lon, current_lat)
                 
                 self.x_coord_input.setValue(utm_x)
                 self.y_coord_input.setValue(utm_y)
@@ -636,25 +609,26 @@ class BoundingBoxCreatorTool(BaseTool):
             
             # Export to selected formats
             output_prefix = Path(self.output_path_input.text())
-            exported_files = []
             
-            if self.shapefile_checkbox.isChecked():
-                shp_path = output_prefix.with_suffix('.shp')
-                gdf_export.to_file(shp_path, driver="ESRI Shapefile")
-                exported_files.append(str(shp_path))
-                
-            if self.geojson_checkbox.isChecked():
-                geojson_path = output_prefix.with_suffix('.geojson')
-                gdf_export.to_file(geojson_path, driver="GeoJSON")
-                exported_files.append(str(geojson_path))
-                
-            if self.kml_checkbox.isChecked():
-                # KML requires WGS84 coordinates
-                gdf_wgs84 = gdf.to_crs("EPSG:4326")
-                kml_path = output_prefix.with_suffix('.kml')
-                gdf_wgs84.to_file(kml_path, driver="KML")
-                exported_files.append(str(kml_path))
-                
+            # Build format dictionary for export utility
+            export_formats = {
+                'shp': self.shapefile_checkbox.isChecked(),
+                'geojson': self.geojson_checkbox.isChecked(),
+                'kml': self.kml_checkbox.isChecked(),
+                'kmz': self.kmz_checkbox.isChecked(),
+                'gpkg': self.geopackage_checkbox.isChecked(),
+                'gml': self.gml_checkbox.isChecked(),
+                'tab': self.tab_checkbox.isChecked()
+            }
+            
+            # Export to GIS formats using utility
+            exported_files = export_geodataframe_multi(
+                gdf, output_prefix, export_formats,
+                layer_name=bbox_name,
+                keep_utm=self.keep_utm_checkbox.isChecked()
+            )
+            
+            # Text file export (not handled by geo_export_utils)
             if self.txt_checkbox.isChecked():
                 # Export comprehensive text file with all parameters
                 txt_path = output_prefix.with_suffix('.txt')
@@ -668,10 +642,7 @@ class BoundingBoxCreatorTool(BaseTool):
                     wgs84_lon, wgs84_lat = input_x, input_y
                 else:
                     # Convert UTM to WGS84
-                    transformer = Transformer.from_crs(
-                        f"EPSG:{utm_epsg}", "EPSG:4326", always_xy=True
-                    )
-                    wgs84_lon, wgs84_lat = transformer.transform(input_x, input_y)
+                    wgs84_lon, wgs84_lat = utm_to_wgs84(input_x, input_y, utm_epsg)
                 
                 # Get WGS84 bbox extents if converted
                 gdf_wgs84_bounds = gdf.to_crs("EPSG:4326")
@@ -758,44 +729,6 @@ class BoundingBoxCreatorTool(BaseTool):
                 
                 exported_files.append(str(txt_path))
                 
-            if self.kmz_checkbox.isChecked():
-                # KMZ is compressed KML (requires WGS84)
-                gdf_wgs84 = gdf.to_crs("EPSG:4326")
-                
-                # Create temporary KML file
-                temp_kml = output_prefix.with_suffix('.kml.temp')
-                gdf_wgs84.to_file(temp_kml, driver="KML")
-                
-                # Compress to KMZ
-                kmz_path = output_prefix.with_suffix('.kmz')
-                with zipfile.ZipFile(kmz_path, 'w', zipfile.ZIP_DEFLATED) as kmz:
-                    kmz.write(temp_kml, 'doc.kml')
-                
-                # Remove temporary KML
-                temp_kml.unlink()
-                
-                exported_files.append(str(kmz_path))
-                
-            if self.geopackage_checkbox.isChecked():
-                # GeoPackage supports any CRS - use bbox name as layer name
-                gpkg_path = output_prefix.with_suffix('.gpkg')
-                # Sanitize layer name (replace spaces and special chars)
-                layer_name = bbox_name.replace(" ", "_").replace(",", "")
-                gdf_export.to_file(gpkg_path, driver="GPKG", layer=layer_name)
-                exported_files.append(str(gpkg_path))
-                
-            if self.gml_checkbox.isChecked():
-                # GML (Geography Markup Language) supports any CRS
-                gml_path = output_prefix.with_suffix('.gml')
-                gdf_export.to_file(gml_path, driver="GML")
-                exported_files.append(str(gml_path))
-                
-            if self.tab_checkbox.isChecked():
-                # MapInfo TAB format
-                tab_path = output_prefix.with_suffix('.tab')
-                gdf_export.to_file(tab_path, driver="MapInfo File")
-                exported_files.append(str(tab_path))
-                
             # Show success message
             files_list = "\n".join(exported_files)
             QMessageBox.information(
@@ -806,13 +739,8 @@ class BoundingBoxCreatorTool(BaseTool):
                 f"Exported files:\n{files_list}"
             )
             
-            # Update status (if parent has status bar)
-            from PySide6.QtWidgets import QMainWindow
-            main_window = self.window()
-            if isinstance(main_window, QMainWindow) and main_window.statusBar():
-                main_window.statusBar().showMessage(
-                    f"Created bounding box: {len(exported_files)} file(s) exported", 5000
-                )
+            # Update status bar
+            self._update_status(f"Created bounding box: {len(exported_files)} file(s) exported")
                 
         except Exception as e:
             QMessageBox.critical(
@@ -833,24 +761,8 @@ class BoundingBoxCreatorTool(BaseTool):
             lon = self.x_coord_input.value()
             lat = self.y_coord_input.value()
             
-            # Determine UTM zone from longitude
-            utm_zone = int((lon + 180) / 6) + 1
-            
-            # Determine hemisphere and EPSG code
-            if lat >= 0:
-                # Northern hemisphere: EPSG 32601-32660
-                utm_epsg = 32600 + utm_zone
-            else:
-                # Southern hemisphere: EPSG 32701-32760
-                utm_epsg = 32700 + utm_zone
-                
-            # Transform coordinates
-            transformer = Transformer.from_crs(
-                "EPSG:4326",
-                f"EPSG:{utm_epsg}",
-                always_xy=True
-            )
-            utm_x, utm_y = transformer.transform(lon, lat)
+            # Calculate UTM EPSG and transform coordinates
+            utm_x, utm_y, utm_epsg = wgs84_to_utm(lon, lat)
             
             return utm_x, utm_y, utm_epsg
             
@@ -899,14 +811,12 @@ class BoundingBoxCreatorTool(BaseTool):
         if self.utm_radio.isChecked():
             try:
                 epsg_code = int(self.utm_zone_input.text())
-                # Valid UTM EPSG codes are 32601-32660 (North) and 32701-32760 (South)
-                if not ((32601 <= epsg_code <= 32660) or (32701 <= epsg_code <= 32760)):
+                is_valid, error_msg = validate_utm_epsg(epsg_code)
+                if not is_valid:
                     QMessageBox.warning(
                         self,
                         "Validation Error",
-                        "Invalid UTM EPSG code. Valid ranges:\n"
-                        "Northern Hemisphere: 32601-32660\n"
-                        "Southern Hemisphere: 32701-32760"
+                        error_msg
                     )
                     return False
             except ValueError:

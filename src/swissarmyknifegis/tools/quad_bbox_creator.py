@@ -20,11 +20,15 @@ from PySide6.QtGui import QIntValidator
 
 import geopandas as gpd
 from shapely.geometry import Polygon, mapping
-from pyproj import Transformer, CRS
+from pyproj import CRS
 from osgeo import gdal
 
 from swissarmyknifegis.tools.base_tool import BaseTool
 from swissarmyknifegis.core.cities import get_major_cities, populate_city_combo
+from swissarmyknifegis.core.coord_utils import (
+    calculate_utm_epsg, validate_utm_epsg, wgs84_to_utm, utm_to_wgs84, transform_coordinates
+)
+from swissarmyknifegis.core.geo_export_utils import export_geodataframe_multi
 
 
 class QuadBBoxCreatorTool(BaseTool):
@@ -262,21 +266,16 @@ class QuadBBoxCreatorTool(BaseTool):
                     # Determine UTM zone from center of bbox
                     center_lon = (east + west) / 2
                     center_lat = (north + south) / 2
-                    utm_zone = int((center_lon + 180) / 6) + 1
+                    utm_epsg_code = calculate_utm_epsg(center_lon, center_lat)
                     
-                    if center_lat >= 0:
-                        epsg_code = f"EPSG:{32600 + utm_zone}"
-                    else:
-                        epsg_code = f"EPSG:{32700 + utm_zone}"
-                    
-                    self.utm_epsg_input.setText(str(32600 + utm_zone) if center_lat >= 0 else str(32700 + utm_zone))
+                    epsg_code = f"EPSG:{utm_epsg_code}"
+                    self.utm_epsg_input.setText(str(utm_epsg_code))
                     
                     # Transform corners to UTM
-                    transformer = Transformer.from_crs("EPSG:4326", epsg_code, always_xy=True)
-                    nw_x, nw_y = transformer.transform(west, north)
-                    ne_x, ne_y = transformer.transform(east, north)
-                    se_x, se_y = transformer.transform(east, south)
-                    sw_x, sw_y = transformer.transform(west, south)
+                    nw_x, nw_y = transform_coordinates(west, north, "EPSG:4326", epsg_code)
+                    ne_x, ne_y = transform_coordinates(east, north, "EPSG:4326", epsg_code)
+                    se_x, se_y = transform_coordinates(east, south, "EPSG:4326", epsg_code)
+                    sw_x, sw_y = transform_coordinates(west, south, "EPSG:4326", epsg_code)
                     
                     # Display boundaries in UTM
                     self.north_input.setText(f"{max(nw_y, ne_y):.2f}")
@@ -293,13 +292,12 @@ class QuadBBoxCreatorTool(BaseTool):
                 if epsg_text:
                     try:
                         epsg_code = f"EPSG:{epsg_text}"
-                        transformer = Transformer.from_crs(epsg_code, "EPSG:4326", always_xy=True)
                         
                         # Transform corners from UTM to Lon/Lat
-                        nw_lon, nw_lat = transformer.transform(west, north)
-                        ne_lon, ne_lat = transformer.transform(east, north)
-                        se_lon, se_lat = transformer.transform(east, south)
-                        sw_lon, sw_lat = transformer.transform(west, south)
+                        nw_lon, nw_lat = transform_coordinates(west, north, epsg_code, "EPSG:4326")
+                        ne_lon, ne_lat = transform_coordinates(east, north, epsg_code, "EPSG:4326")
+                        se_lon, se_lat = transform_coordinates(east, south, epsg_code, "EPSG:4326")
+                        sw_lon, sw_lat = transform_coordinates(west, south, epsg_code, "EPSG:4326")
                         
                         # Display boundaries in Lon/Lat
                         self.north_input.setText(f"{max(nw_lat, ne_lat):.6f}")
@@ -371,20 +369,16 @@ class QuadBBoxCreatorTool(BaseTool):
             self.west_input.setText(f"{west:.6f}")
         else:
             # Convert to UTM first
-            utm_zone = int((lon + 180) / 6) + 1
-            if lat >= 0:
-                epsg_code = f"EPSG:{32600 + utm_zone}"
-            else:
-                epsg_code = f"EPSG:{32700 + utm_zone}"
+            utm_epsg_code = calculate_utm_epsg(lon, lat)
+            epsg_code = f"EPSG:{utm_epsg_code}"
             
-            self.utm_epsg_input.setText(str(32600 + utm_zone) if lat >= 0 else str(32700 + utm_zone))
+            self.utm_epsg_input.setText(str(utm_epsg_code))
             
             # Transform corners to UTM
-            transformer = Transformer.from_crs("EPSG:4326", epsg_code, always_xy=True)
-            nw_x, nw_y = transformer.transform(west, north)
-            ne_x, ne_y = transformer.transform(east, north)
-            se_x, se_y = transformer.transform(east, south)
-            sw_x, sw_y = transformer.transform(west, south)
+            nw_x, nw_y = transform_coordinates(west, north, "EPSG:4326", epsg_code)
+            ne_x, ne_y = transform_coordinates(east, north, "EPSG:4326", epsg_code)
+            se_x, se_y = transform_coordinates(east, south, "EPSG:4326", epsg_code)
+            sw_x, sw_y = transform_coordinates(west, south, "EPSG:4326", epsg_code)
             
             # Display boundaries in UTM
             self.north_input.setText(f"{max(nw_y, ne_y):.2f}")
@@ -545,23 +539,16 @@ class QuadBBoxCreatorTool(BaseTool):
         # Use center point to determine UTM zone
         center_lon = (east + west) / 2
         center_lat = (north + south) / 2
-        utm_zone = int((center_lon + 180) / 6) + 1
-        
-        # Determine hemisphere
-        if center_lat >= 0:
-            epsg_code = f"EPSG:{32600 + utm_zone}"
-        else:
-            epsg_code = f"EPSG:{32700 + utm_zone}"
+        utm_epsg_num = calculate_utm_epsg(center_lon, center_lat)
+        epsg_code = f"EPSG:{utm_epsg_num}"
         
         # Transform corner coordinates
-        transformer = Transformer.from_crs("EPSG:4326", epsg_code, always_xy=True)
-        
         # Create corners: NW, NE, SE, SW (clockwise from top-left)
         corners = [
-            transformer.transform(west, north),
-            transformer.transform(east, north),
-            transformer.transform(east, south),
-            transformer.transform(west, south)
+            transform_coordinates(west, north, "EPSG:4326", epsg_code),
+            transform_coordinates(east, north, "EPSG:4326", epsg_code),
+            transform_coordinates(east, south, "EPSG:4326", epsg_code),
+            transform_coordinates(west, south, "EPSG:4326", epsg_code)
         ]
         
         return corners, epsg_code
@@ -676,8 +663,9 @@ class QuadBBoxCreatorTool(BaseTool):
             
             try:
                 epsg_int = int(epsg_text)
-                if epsg_int < 32601 or epsg_int > 32760:
-                    QMessageBox.warning(self, "Validation Error", "UTM EPSG code must be between 32601 and 32760.")
+                is_valid, error_msg = validate_utm_epsg(epsg_int)
+                if not is_valid:
+                    QMessageBox.warning(self, "Validation Error", error_msg)
                     return False
             except ValueError:
                 QMessageBox.warning(self, "Validation Error", "Invalid UTM EPSG code.")
@@ -748,70 +736,27 @@ class QuadBBoxCreatorTool(BaseTool):
             # Prepare output message
             results = []
             
-            # Export to selected formats
-            if self.format_geojson.isChecked():
-                geojson_path = output_prefix.with_suffix(".geojson")
-                if self.keep_utm.isChecked():
-                    gdf.to_file(geojson_path, driver="GeoJSON")
-                else:
-                    gdf.to_crs("EPSG:4326").to_file(geojson_path, driver="GeoJSON")
-                results.append(f"GeoJSON: {geojson_path}")
+            # Build format dictionary for export utility
+            export_formats = {
+                'geojson': self.format_geojson.isChecked(),
+                'shp': self.format_shp.isChecked(),
+                'gpkg': self.format_gpkg.isChecked(),
+                'gml': self.format_gml.isChecked(),
+                'tab': self.format_tab.isChecked(),
+                'kml': self.format_kml.isChecked(),
+                'kmz': self.format_kmz.isChecked()
+            }
             
-            if self.format_shp.isChecked():
-                shp_path = output_prefix.with_suffix(".shp")
-                if self.keep_utm.isChecked():
-                    gdf.to_file(shp_path, driver="ESRI Shapefile")
-                else:
-                    gdf.to_crs("EPSG:4326").to_file(shp_path, driver="ESRI Shapefile")
-                results.append(f"Shapefile: {shp_path}")
-            
-            if self.format_gpkg.isChecked():
-                gpkg_path = output_prefix.with_suffix(".gpkg")
-                # Sanitize layer name (replace spaces and special chars)
-                layer_name = bbox_name.replace(" ", "_").replace(",", "")
-                if self.keep_utm.isChecked():
-                    gdf.to_file(gpkg_path, driver="GPKG", layer=layer_name)
-                else:
-                    gdf.to_crs("EPSG:4326").to_file(gpkg_path, driver="GPKG", layer=layer_name)
-                results.append(f"GeoPackage: {gpkg_path}")
-            
-            if self.format_gml.isChecked():
-                gml_path = output_prefix.with_suffix(".gml")
-                if self.keep_utm.isChecked():
-                    gdf.to_file(gml_path, driver="GML")
-                else:
-                    gdf.to_crs("EPSG:4326").to_file(gml_path, driver="GML")
-                results.append(f"GML: {gml_path}")
-            
-            if self.format_tab.isChecked():
-                tab_path = output_prefix.with_suffix(".tab")
-                if self.keep_utm.isChecked():
-                    gdf.to_file(tab_path, driver="MapInfo File")
-                else:
-                    gdf.to_crs("EPSG:4326").to_file(tab_path, driver="MapInfo File")
-                results.append(f"MapInfo TAB: {tab_path}")
-            
-            # KML/KMZ require WGS84
-            if self.format_kml.isChecked() or self.format_kmz.isChecked():
-                gdf_wgs84 = gdf.to_crs("EPSG:4326")
-                
-                if self.format_kml.isChecked():
-                    kml_path = output_prefix.with_suffix(".kml")
-                    gdf_wgs84.to_file(kml_path, driver="KML")
-                    results.append(f"KML: {kml_path}")
-                
-                if self.format_kmz.isChecked():
-                    # Create KMZ by zipping KML
-                    kml_temp_path = output_prefix.with_suffix(".temp.kml")
-                    kmz_path = output_prefix.with_suffix(".kmz")
-                    
-                    gdf_wgs84.to_file(kml_temp_path, driver="KML")
-                    
-                    with zipfile.ZipFile(kmz_path, 'w', zipfile.ZIP_DEFLATED) as kmz:
-                        kmz.write(kml_temp_path, "doc.kml")
-                    
-                    kml_temp_path.unlink()
-                    results.append(f"KMZ: {kmz_path}")
+            # Export to GIS formats using utility
+            try:
+                exported_files = export_geodataframe_multi(
+                    gdf, output_prefix, export_formats,
+                    layer_name=bbox_name,
+                    keep_utm=self.keep_utm.isChecked()
+                )
+                results = [f"{Path(f).suffix.upper()[1:]}: {f}" for f in exported_files]
+            except Exception as e:
+                raise Exception(f"Export failed: {str(e)}") from e
             
             # Text file with details
             if self.format_txt.isChecked():
@@ -839,13 +784,7 @@ class QuadBBoxCreatorTool(BaseTool):
                 f"Bounding box created successfully!\n\n{len(results)} file(s) exported."
             )
             
-            from PySide6.QtWidgets import QMainWindow
-            main_window = self.window()
-            if isinstance(main_window, QMainWindow) and main_window.statusBar():
-                main_window.statusBar().showMessage(
-                    f"Bounding box created: {len(results)} format(s) exported",
-                    5000
-                )
+            self._update_status(f"Bounding box created: {len(results)} format(s) exported")
         
         except Exception as e:
             QMessageBox.critical(
@@ -853,7 +792,6 @@ class QuadBBoxCreatorTool(BaseTool):
                 "Error",
                 f"Failed to create bounding box:\n{str(e)}"
             )
-            from PySide6.QtWidgets import QMainWindow
             main_window = self.window()
             if isinstance(main_window, QMainWindow) and main_window.statusBar():
                 main_window.statusBar().showMessage("Error creating bounding box", 5000)

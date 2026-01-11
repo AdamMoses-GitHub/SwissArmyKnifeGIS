@@ -403,30 +403,17 @@ class GISCropperTool(BaseTool):
             
     def _on_crop(self):
         """Crop all GIS files by the bounding box."""
-        # Validate inputs
+        # Validate all inputs
+        if not self.validate_inputs():
+            return
+        
+        # Additional validation for analysis results
         if not self.analysis_results:
             QMessageBox.warning(
                 self,
                 "Validation Error",
                 "Please run analysis first before cropping."
             )
-            return
-            
-        if not self.output_dir_input.text().strip():
-            QMessageBox.warning(
-                self,
-                "Validation Error",
-                "Please select an output directory."
-            )
-            return
-        
-        # Validate inputs
-        if not self.gis_files:
-            QMessageBox.warning(self, "Error", "Please add GIS files first")
-            return
-        
-        if not self.bbox_file:
-            QMessageBox.warning(self, "Error", "Please select a bounding box file first")
             return
         
         output_dir = Path(self.output_dir_input.text())
@@ -686,3 +673,49 @@ class GISCropperTool(BaseTool):
         
         finally:
             src_ds = None
+    
+    def validate_inputs(self) -> bool:
+        """Validate user inputs before cropping.
+        
+        Returns:
+            True if inputs are valid, False otherwise
+        """
+        # Check if GIS files are loaded
+        if not self.loaded_files:
+            QMessageBox.warning(
+                self,
+                "Validation Error",
+                "No GIS files loaded. Please add files to crop."
+            )
+            return False
+        
+        # Check if bounding box file is selected
+        if not self.bbox_file_path.strip():
+            QMessageBox.warning(
+                self,
+                "Validation Error",
+                "No bounding box file selected. Please select a bbox file."
+            )
+            return False
+        
+        # Check if output directory is specified
+        if not self.output_directory.strip():
+            QMessageBox.warning(
+                self,
+                "Validation Error",
+                "No output directory selected. Please choose an output directory."
+            )
+            return False
+        
+        # Check if output directory exists or can be created
+        output_dir = Path(self.output_directory)
+        if not output_dir.exists():
+            if not self._safe_create_directory(str(output_dir)):
+                return False
+        
+        # Validate output directory is writable
+        test_file = output_dir / "test_cropped.tif"
+        if not self._validate_output_path(str(test_file)):
+            return False
+        
+        return True

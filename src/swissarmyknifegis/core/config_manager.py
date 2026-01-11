@@ -71,7 +71,14 @@ class ConfigManager:
             }
     
     def save(self):
-        """Save configuration to JSON file."""
+        """Save configuration to JSON file.
+        
+        Raises:
+            IOError: If unable to write configuration file
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
             # Create config directory if it doesn't exist
             self._config_dir.mkdir(parents=True, exist_ok=True)
@@ -79,8 +86,12 @@ class ConfigManager:
             # Write config file with pretty formatting
             with open(self._config_file, 'w', encoding='utf-8') as f:
                 json.dump(self._config, f, indent=2, ensure_ascii=False)
+            
+            logger.debug(f"Configuration saved to {self._config_file}")
+            
         except IOError as e:
-            print(f"Warning: Failed to save config file: {e}")
+            logger.error(f"Failed to save config file: {e}")
+            raise  # Re-raise so caller can handle
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value by hierarchical key.
