@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 import zipfile
 import json
+import logging
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -282,8 +283,9 @@ class QuadBBoxCreatorTool(BaseTool):
                     self.south_input.setText(f"{min(se_y, sw_y):.2f}")
                     self.east_input.setText(f"{max(ne_x, se_x):.2f}")
                     self.west_input.setText(f"{min(nw_x, sw_x):.2f}")
-                except Exception:
+                except Exception as e:
                     # If conversion fails, skip it but still update preview
+                    logging.debug(f"Coordinate conversion failed when switching to UTM mode: {e}")
                     pass
             else:
                 # Switching to Lon/Lat mode - convert from UTM
@@ -304,9 +306,13 @@ class QuadBBoxCreatorTool(BaseTool):
                         self.south_input.setText(f"{min(se_lat, sw_lat):.6f}")
                         self.east_input.setText(f"{max(ne_lon, se_lon):.6f}")
                         self.west_input.setText(f"{min(nw_lon, sw_lon):.6f}")
-                    except Exception:
+                    except Exception as e:
                         # If conversion fails, clear EPSG and don't convert coordinates
+                        logging.debug(f"Coordinate conversion failed when switching to Lon/Lat mode: {e}")
                         self.utm_epsg_input.clear()
+        
+        # Update UTM rounding combo state based on current mode
+        self.utm_rounding_combo.setEnabled(self.utm_radio.isChecked())
         
         self._update_preview()
     
@@ -618,8 +624,9 @@ class QuadBBoxCreatorTool(BaseTool):
             self.preview_perimeter.setText(f"{perimeter:.2f}")
             
         except Exception as e:
-            # Clear preview on error
-            self.preview_area.setText(f"Error: {str(e)}")
+            # Clear preview on error and log for debugging
+            logging.debug(f"Preview update failed: {e}")
+            self.preview_area.setText("Preview unavailable")
             self.preview_perimeter.clear()
     
     def validate_inputs(self) -> bool:
