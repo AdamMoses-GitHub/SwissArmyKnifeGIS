@@ -23,7 +23,7 @@ from pyproj import Transformer, CRS
 from osgeo import gdal
 
 from swissarmyknifegis.tools.base_tool import BaseTool
-from swissarmyknifegis.core.cities import get_major_cities
+from swissarmyknifegis.core.cities import get_major_cities, populate_city_combo
 
 
 class QuadBBoxCreatorTool(BaseTool):
@@ -91,19 +91,7 @@ class QuadBBoxCreatorTool(BaseTool):
         location_layout = QFormLayout()
         
         self.location_combo = QComboBox()
-        self.location_combo.addItem("-- Select City --", None)
-        
-        # Add US cities with separator
-        self.location_combo.addItem("=== UNITED STATES ===", None)
-        for city_name, coords in self.cities.items():
-            if ", USA" in city_name:
-                self.location_combo.addItem(city_name, coords)
-        
-        # Add international cities with separator
-        self.location_combo.addItem("=== INTERNATIONAL ===", None)
-        for city_name, coords in self.cities.items():
-            if ", USA" not in city_name:
-                self.location_combo.addItem(city_name, coords)
+        populate_city_combo(self.location_combo, "-- Select City --")
         
         location_layout.addRow("Location:", self.location_combo)
         
@@ -397,6 +385,97 @@ class QuadBBoxCreatorTool(BaseTool):
             self.south_input.setText(f"{min(se_y, sw_y):.2f}")
             self.east_input.setText(f"{max(ne_x, se_x):.2f}")
             self.west_input.setText(f"{min(nw_x, sw_x):.2f}")
+    
+    def _format_bbox_text_report(self, bbox_name: str, north: float, south: float, 
+                                  east: float, west: float, utm_epsg: str, 
+                                  polygon, gdf, input_mode: str) -> str:
+        """Format comprehensive text report for bounding box parameters.
+        
+        Args:
+            bbox_name: Name of the bounding box
+            north, south, east, west: Input boundary values
+            utm_epsg: UTM EPSG code (e.g., 'EPSG:32633')
+            polygon: Shapely polygon geometry in UTM
+            gdf: GeoDataFrame containing the bbox geometry
+            input_mode: Description of input coordinate system
+            
+        Returns:
+            Formatted text content as a string
+        """
+        minx, miny, maxx, maxy = polygon.bounds
+        area = polygon.area
+        perimeter = polygon.length
+        
+        # Get WGS84 bounds for display
+        gdf_wgs84 = gdf.to_crs("EPSG:4326")
+        wgs84_bounds = gdf_wgs84.total_bounds
+        wgs84_poly = gdf_wgs84.geometry.iloc[0]
+        
+        # Build text content in comprehensive format
+        txt_content = []
+        txt_content.append("========================================")
+        txt_content.append("   BOUNDING BOX PARAMETERS")
+        txt_content.append("========================================")
+        txt_content.append("")
+        
+        # Input boundaries section
+        txt_content.append("--- INPUT BOUNDARIES ---")
+        txt_content.append("")
+        txt_content.append(f"North: {north}")
+        txt_content.append(f"South: {south}")
+        txt_content.append(f"East: {east}")
+        txt_content.append(f"West: {west}")
+        txt_content.append("")
+        
+        # Bounding box extents section
+        txt_content.append("--- BOUNDING BOX EXTENTS ---")
+        txt_content.append("")
+        txt_content.append(f"UTM ({utm_epsg}):")
+        txt_content.append(f"  Min X (West):  {minx:.2f} m")
+        txt_content.append(f"  Max X (East):  {maxx:.2f} m")
+        txt_content.append(f"  Min Y (South): {miny:.2f} m")
+        txt_content.append(f"  Max Y (North): {maxy:.2f} m")
+        txt_content.append("")
+        txt_content.append("WGS84 (EPSG:4326):")
+        txt_content.append(f"  Min Lon (West):  {wgs84_bounds[0]:.6f}°")
+        txt_content.append(f"  Max Lon (East):  {wgs84_bounds[2]:.6f}°")
+        txt_content.append(f"  Min Lat (South): {wgs84_bounds[1]:.6f}°")
+        txt_content.append(f"  Max Lat (North): {wgs84_bounds[3]:.6f}°")
+        txt_content.append("")
+        
+        # Size and geometry section
+        txt_content.append("--- SIZE AND GEOMETRY ---")
+        txt_content.append("")
+        txt_content.append(f"Area:       {area:.2f} m² ({area/1e6:.4f} km²)")
+        txt_content.append(f"Perimeter:  {perimeter:.2f} m ({perimeter/1e3:.4f} km)")
+        txt_content.append("")
+        
+        # CRS information section
+        txt_content.append("--- COORDINATE REFERENCE SYSTEM ---")
+        txt_content.append("")
+        txt_content.append(f"Input CRS:  {input_mode}")
+        txt_content.append(f"Output CRS: {('UTM ' + utm_epsg) if self.keep_utm.isChecked() else 'WGS84 (EPSG:4326)'}")
+        txt_content.append(f"UTM Zone:   {utm_epsg}")
+        txt_content.append("")
+        
+        # Configuration section
+        txt_content.append("--- CONFIGURATION ---")
+        txt_content.append("")
+        txt_content.append(f"Bounding Box Name: {bbox_name}")
+        txt_content.append(f"Input Method:      Point boundaries")
+        txt_content.append(f"Keep UTM Projection: {'Yes' if self.keep_utm.isChecked() else 'No'}")
+        txt_content.append("")
+        
+        # Corner points section
+        txt_content.append("--- CORNER POINTS (WGS84) ---")
+        txt_content.append("")
+        coords_wgs84 = list(wgs84_poly.exterior.coords)[:-1]  # Remove duplicate last point
+        for i, (lon, lat) in enumerate(coords_wgs84, 1):
+            txt_content.append(f"  Point {i}: ({lon:.6f}, {lat:.6f})")
+        txt_content.append("")
+        txt_content.append("========================================")
+        
+        return '\n'.join(txt_content)
     
     def _browse_output(self):
         """Open file dialog to select output path."""
@@ -731,82 +810,18 @@ class QuadBBoxCreatorTool(BaseTool):
             if self.format_txt.isChecked():
                 txt_path = output_prefix.with_suffix(".txt")
                 
-                minx, miny, maxx, maxy = polygon.bounds
-                area = polygon.area
-                perimeter = polygon.length
+                # Get input mode description
+                input_mode = 'WGS84 (EPSG:4326)' if self.lonlat_radio.isChecked() else f'UTM ({utm_epsg})'
                 
-                # Get WGS84 bounds for display
-                gdf_wgs84 = gdf.to_crs("EPSG:4326")
-                wgs84_bounds = gdf_wgs84.total_bounds
-                wgs84_poly = gdf_wgs84.geometry.iloc[0]
-                
-                # Build text content in comprehensive format
-                txt_content = []
-                txt_content.append("========================================")
-                txt_content.append("   BOUNDING BOX PARAMETERS")
-                txt_content.append("========================================")
-                txt_content.append("")
-                
-                # Input boundaries section
-                txt_content.append("--- INPUT BOUNDARIES ---")
-                txt_content.append("")
-                txt_content.append(f"North: {north}")
-                txt_content.append(f"South: {south}")
-                txt_content.append(f"East: {east}")
-                txt_content.append(f"West: {west}")
-                txt_content.append("")
-                
-                # Bounding box extents section
-                txt_content.append("--- BOUNDING BOX EXTENTS ---")
-                txt_content.append("")
-                txt_content.append(f"UTM ({utm_epsg}):")
-                txt_content.append(f"  Min X (West):  {minx:.2f} m")
-                txt_content.append(f"  Max X (East):  {maxx:.2f} m")
-                txt_content.append(f"  Min Y (South): {miny:.2f} m")
-                txt_content.append(f"  Max Y (North): {maxy:.2f} m")
-                txt_content.append("")
-                txt_content.append("WGS84 (EPSG:4326):")
-                txt_content.append(f"  Min Lon (West):  {wgs84_bounds[0]:.6f}°")
-                txt_content.append(f"  Max Lon (East):  {wgs84_bounds[2]:.6f}°")
-                txt_content.append(f"  Min Lat (South): {wgs84_bounds[1]:.6f}°")
-                txt_content.append(f"  Max Lat (North): {wgs84_bounds[3]:.6f}°")
-                txt_content.append("")
-                
-                # Size and geometry section
-                txt_content.append("--- SIZE AND GEOMETRY ---")
-                txt_content.append("")
-                txt_content.append(f"Area:       {area:.2f} m² ({area/1e6:.4f} km²)")
-                txt_content.append(f"Perimeter:  {perimeter:.2f} m ({perimeter/1e3:.4f} km)")
-                txt_content.append("")
-                
-                # CRS information section
-                txt_content.append("--- COORDINATE REFERENCE SYSTEM ---")
-                txt_content.append("")
-                txt_content.append(f"Input CRS:  {'WGS84 (EPSG:4326)' if self.lonlat_radio.isChecked() else f'UTM ({utm_epsg})'}")
-                txt_content.append(f"Output CRS: {('UTM ' + utm_epsg) if self.keep_utm.isChecked() else 'WGS84 (EPSG:4326)'}")
-                txt_content.append(f"UTM Zone:   {utm_epsg}")
-                txt_content.append("")
-                
-                # Configuration section
-                txt_content.append("--- CONFIGURATION ---")
-                txt_content.append("")
-                txt_content.append(f"Bounding Box Name: {bbox_name}")
-                txt_content.append(f"Input Method:      Point boundaries")
-                txt_content.append(f"Keep UTM Projection: {'Yes' if self.keep_utm.isChecked() else 'No'}")
-                txt_content.append("")
-                
-                # Corner points section
-                txt_content.append("--- CORNER POINTS (WGS84) ---")
-                txt_content.append("")
-                coords_wgs84 = list(wgs84_poly.exterior.coords)[:-1]  # Remove duplicate last point
-                for i, (lon, lat) in enumerate(coords_wgs84, 1):
-                    txt_content.append(f"  Point {i}: ({lon:.6f}, {lat:.6f})")
-                txt_content.append("")
-                txt_content.append("========================================")
+                # Generate formatted text content
+                txt_content = self._format_bbox_text_report(
+                    bbox_name, north, south, east, west, 
+                    utm_epsg, polygon, gdf, input_mode
+                )
                 
                 # Write to file
                 with open(txt_path, 'w', encoding='utf-8') as f:
-                    f.write('\n'.join(txt_content))
+                    f.write(txt_content)
                 
                 results.append(f"Text: {txt_path}")
             

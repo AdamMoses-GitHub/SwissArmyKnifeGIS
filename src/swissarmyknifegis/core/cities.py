@@ -88,3 +88,32 @@ def get_cities_grouped() -> List[Tuple[str, List[Tuple[str, float, float]]]]:
         ("United States", us_cities),
         ("International", intl_cities)
     ]
+
+
+def populate_city_combo(combo_widget, placeholder_text: str = "-- Select City --"):
+    """
+    Populate a QComboBox with major cities organized by region.
+    
+    This utility function is used by bbox creation tools to provide a consistent
+    city selection dropdown interface.
+    
+    Args:
+        combo_widget: QComboBox instance to populate
+        placeholder_text: Text for the first (placeholder) item
+    """
+    cities = get_major_cities()
+    
+    # Add placeholder item
+    combo_widget.addItem(placeholder_text, None)
+    
+    # Add US cities with separator
+    combo_widget.addItem("=== UNITED STATES ===", None)
+    for city_name, coords in cities.items():
+        if ", USA" in city_name:
+            combo_widget.addItem(city_name, coords)
+    
+    # Add international cities with separator
+    combo_widget.addItem("=== INTERNATIONAL ===", None)
+    for city_name, coords in cities.items():
+        if ", USA" not in city_name:
+            combo_widget.addItem(city_name, coords)

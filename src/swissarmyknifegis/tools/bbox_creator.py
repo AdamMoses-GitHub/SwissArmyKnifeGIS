@@ -19,7 +19,7 @@ from shapely.geometry import box
 from pyproj import Transformer, CRS
 
 from swissarmyknifegis.tools.base_tool import BaseTool
-from swissarmyknifegis.core.cities import get_major_cities
+from swissarmyknifegis.core.cities import get_major_cities, populate_city_combo
 
 
 class BoundingBoxCreatorTool(BaseTool):
@@ -297,22 +297,7 @@ class BoundingBoxCreatorTool(BaseTool):
         
     def _populate_city_dropdown(self):
         """Populate the city dropdown with major cities."""
-        self.city_combo.addItem("-- Manual Entry --", None)
-        
-        # Get cities and organize by region
-        cities = get_major_cities()
-        
-        # Add US cities
-        self.city_combo.addItem("=== UNITED STATES ===", None)
-        for city_name, coords in cities.items():
-            if ", USA" in city_name:
-                self.city_combo.addItem(city_name, coords)
-        
-        # Add separator and international cities
-        self.city_combo.addItem("=== INTERNATIONAL ===", None)
-        for city_name, coords in cities.items():
-            if ", USA" not in city_name:
-                self.city_combo.addItem(city_name, coords)
+        populate_city_combo(self.city_combo, "-- Manual Entry --")
     
     def _on_utm_rounding_changed(self, index: int):
         """Handle UTM rounding selection change."""
