@@ -9,7 +9,7 @@ import zipfile
 import json
 import logging
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QLabel, QLineEdit, QPushButton, QRadioButton, 
@@ -39,6 +39,14 @@ class QuadBBoxCreatorTool(BaseTool):
     
     def __init__(self, parent=None):
         self.cities = get_major_cities()
+        
+        # Debounce timer for preview updates (prevents excessive computation)
+        # Must be created BEFORE super().__init__() since setup_ui() triggers preview
+        self._preview_debounce_timer = QTimer()
+        self._preview_debounce_timer.setSingleShot(True)
+        self._preview_debounce_timer.setInterval(300)  # 300ms delay
+        self._preview_debounce_timer.timeout.connect(self._do_update_preview)
+        
         super().__init__(parent)
         
     def get_tool_name(self) -> str:
@@ -554,7 +562,13 @@ class QuadBBoxCreatorTool(BaseTool):
         return corners, epsg_code
     
     def _update_preview(self):
-        """Update the preview fields based on current inputs."""
+        """Schedule a debounced preview update to avoid excessive computations."""
+        # Restart the timer - this debounces rapid changes (e.g., typing EPSG codes)
+        self._preview_debounce_timer.stop()
+        self._preview_debounce_timer.start()
+    
+    def _do_update_preview(self):
+        """Actually update the preview fields based on current inputs (called after debounce delay)."""
         boundaries = self._parse_boundaries()
         
         if not boundaries:

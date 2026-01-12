@@ -11,9 +11,9 @@ from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QComboBox, QLineEdit, QPushButton, QTextEdit,
     QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QCheckBox
+    QHeaderView, QAbstractItemView, QCheckBox, QProgressDialog
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QCoreApplication
 
 from pyproj import CRS
 import geopandas as gpd
@@ -212,6 +212,7 @@ class CoordinateConverterTool(BaseTool):
         
         self.reproject_btn = QPushButton("Reproject All Files")
         self.reproject_btn.setMinimumHeight(40)
+        self.reproject_btn.setEnabled(False)  # Disabled until files loaded and CRS selected
         self.reproject_btn.clicked.connect(self._reproject_all_files)
         
         reproject_layout.addWidget(self.reproject_btn)
@@ -288,6 +289,7 @@ class CoordinateConverterTool(BaseTool):
         self._save_last_path("paths/input/gis_files", file_paths[0])
         
         self.results_display.clear()
+        files_without_crs = []
         
         for file_path in file_paths:
             # Check if already loaded
@@ -300,11 +302,24 @@ class CoordinateConverterTool(BaseTool):
             if file_info:
                 self.loaded_files.append(file_info)
                 self.results_display.append(f"Added: {file_info['filename']}")
+                
+                # Track files without CRS
+                if file_info['crs'] == "No CRS":
+                    files_without_crs.append(file_info['filename'])
             else:
                 self.results_display.append(f"Failed to load: {os.path.basename(file_path)}")
         
+        # Warn about files without CRS
+        if files_without_crs:
+            self.results_display.append("\n⚠ WARNING: The following files have no CRS defined:")
+            for filename in files_without_crs:
+                self.results_display.append(f"  - {filename}")
+            self.results_display.append("Files without CRS cannot be reprojected.")
+            self.results_display.append("Consider defining a CRS for these files first using other GIS tools.")
+        
         self._update_table()
         self._populate_crs_combo()  # Update CRS combo with new file CRS
+        self._update_button_states()
     
     def _get_file_info(self, file_path: str) -> Optional[Dict[str, Any]]:
         """Get information about a GIS file."""
@@ -391,6 +406,7 @@ class CoordinateConverterTool(BaseTool):
         self._update_table()
         self._populate_crs_combo()
         self.results_display.append(f"Removed {len(selected_rows)} file(s)")
+        self._update_button_states()
     
     def _clear_all_files(self):
         """Clear all files from the list."""
@@ -410,6 +426,7 @@ class CoordinateConverterTool(BaseTool):
             self._populate_crs_combo()
             self.results_display.clear()
             self.results_display.append("All files cleared")
+            self._update_button_states()
     
     def _on_output_crs_changed(self, text):
         """Handle output CRS combo box change."""
@@ -421,6 +438,8 @@ class CoordinateConverterTool(BaseTool):
             self.output_crs_epsg.blockSignals(True)
             self.output_crs_epsg.setText(epsg_code)
             self.output_crs_epsg.blockSignals(False)
+        
+        self._update_button_states()
     
     def _on_output_epsg_changed(self, text):
         """Handle output EPSG text change."""
@@ -429,6 +448,8 @@ class CoordinateConverterTool(BaseTool):
             self.output_crs_combo.blockSignals(True)
             self.output_crs_combo.setCurrentIndex(-1)
             self.output_crs_combo.blockSignals(False)
+        
+        self._update_button_states()
     
     def _show_output_crs_info(self):
         """Show information about the output CRS."""
@@ -467,6 +488,7 @@ class CoordinateConverterTool(BaseTool):
         if dir_path:
             self._save_last_path("paths/output/directory", dir_path)
             self.output_dir_path.setText(dir_path)
+            self._update_button_states()
     
     def _get_output_crs(self) -> Optional[CRS]:
         """Get and validate the output CRS object."""
@@ -534,6 +556,18 @@ class CoordinateConverterTool(BaseTool):
             QMessageBox.warning(self, "No Output Directory", "Please select an output directory.")
             return
         
+        # Check for files without CRS
+        files_without_crs = [f for f in self.loaded_files if f['crs'] == "No CRS"]
+        if files_without_crs:
+            file_list = "\n".join([f"  - {f['filename']}" for f in files_without_crs])
+            QMessageBox.critical(
+                self,
+                "CRS Error",
+                f"Cannot reproject files without CRS:\n\n{file_list}\n\n"
+                f"Please remove these files or define their CRS using other GIS tools first."
+            )
+            return
+        
         if not os.path.exists(output_dir):
             try:
                 os.makedirs(output_dir)
@@ -548,7 +582,23 @@ class CoordinateConverterTool(BaseTool):
         success_count = 0
         error_count = 0
         
-        for file_info in self.loaded_files:
+        # Create progress dialog
+        progress = QProgressDialog("Reprojecting files...", "Cancel", 0, len(self.loaded_files), self)
+        progress.setWindowTitle("Reproject Progress")
+        progress.setWindowModality(2)  # Qt.WindowModal
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        
+        for idx, file_info in enumerate(self.loaded_files):
+            # Update progress
+            if progress.wasCanceled():
+                self.results_display.append("\n✗ Reprojection cancelled by user")
+                break
+            
+            progress.setValue(idx)
+            progress.setLabelText(f"Reprojecting {idx + 1}/{len(self.loaded_files)}: {file_info['filename']}")
+            QCoreApplication.processEvents()
+            
             try:
                 output_path = os.path.join(output_dir, file_info['filename'])
                 
@@ -563,6 +613,9 @@ class CoordinateConverterTool(BaseTool):
             except Exception as e:
                 self.results_display.append(f"✗ {file_info['filename']}: {str(e)}")
                 error_count += 1
+        
+        progress.setValue(len(self.loaded_files))
+        progress.close()
         
         self.results_display.append("=" * 60)
         self.results_display.append(f"Complete: {success_count} succeeded, {error_count} failed")
@@ -662,4 +715,12 @@ class CoordinateConverterTool(BaseTool):
     
     def validate_inputs(self) -> bool:
         """Validate user inputs."""
-        return len(self.loaded_files) > 0 and self._get_output_crs() is not None
+        return len(self.loaded_files) > 0 and self._get_output_crs() is not None    
+    def _update_button_states(self):
+        """Update button states based on current tool state."""
+        has_files = len(self.loaded_files) > 0
+        has_output_crs = self._get_output_crs() is not None
+        has_output_dir = bool(self.output_dir_path.text().strip())
+        
+        # Reproject button requires files, CRS, and output directory
+        self.reproject_btn.setEnabled(has_files and has_output_crs and has_output_dir)

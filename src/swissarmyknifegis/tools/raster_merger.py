@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QRadioButton,
     QSpinBox,
@@ -26,7 +27,7 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QCoreApplication
 from PySide6.QtGui import QColor
 
 from swissarmyknifegis.tools.base_tool import BaseTool
@@ -275,6 +276,7 @@ class RasterMergerTool(BaseTool):
         button_layout = QHBoxLayout()
         self.analyze_button = QPushButton("Analyze")
         self.analyze_button.setMinimumHeight(40)
+        self.analyze_button.setEnabled(False)  # Disabled until files are loaded
         self.analyze_button.clicked.connect(self._on_analyze)
 
         self.merge_button = QPushButton("Merge Rasters")
@@ -322,8 +324,8 @@ class RasterMergerTool(BaseTool):
                 self.loaded_files.append(file_info)
 
         self._update_table()
-        self.merge_button.setEnabled(False)  # Reset merge button
         self.analysis_results = None
+        self._update_button_states()
 
     def _get_file_info(self, file_path: str) -> Optional[Dict[str, Any]]:
         """Extract information from a raster file."""
@@ -402,14 +404,14 @@ class RasterMergerTool(BaseTool):
                 del self.loaded_files[row]
 
         self._update_table()
-        self.merge_button.setEnabled(False)
         self.analysis_results = None
+        self._update_button_states()
     def _clear_all_files(self):
         """Clear all loaded files."""
         self.loaded_files.clear()
         self._update_table()
-        self.merge_button.setEnabled(False)
         self.analysis_results = None
+        self._update_button_states()
 
     def _select_output_directory(self):
         """Select output directory."""
@@ -485,6 +487,7 @@ class RasterMergerTool(BaseTool):
         output_format: str,
         nodata_value: Optional[float],
         compression: str,
+        progress_dialog: Optional[QProgressDialog] = None,
     ) -> bool:
         """Perform raster merge using GDAL Python bindings.
         
@@ -539,6 +542,10 @@ class RasterMergerTool(BaseTool):
             
             # Create in-memory VRT
             self.results_display.append("Building VRT with target resolution...")
+            if progress_dialog:
+                progress_dialog.setLabelText("Building VRT...")
+                QCoreApplication.processEvents()
+            
             try:
                 vrt_dataset = gdal.BuildVRT('', input_files, options=vrt_options)
                 if vrt_dataset is None:
@@ -574,6 +581,9 @@ class RasterMergerTool(BaseTool):
             
             # Translate VRT to output format
             self.results_display.append(f"Translating to {output_format} format...")
+            if progress_dialog:
+                progress_dialog.setLabelText(f"Writing output file ({output_format})...")
+                QCoreApplication.processEvents()
             
             translate_options_dict = {
                 'format': output_format,
@@ -770,6 +780,43 @@ class RasterMergerTool(BaseTool):
             self.results_display.append(
                 f"  Coarsest resolution: {coarsest_res:.4f} (largest pixels)"
             )
+            
+            # Warn about resolution variance
+            if coarsest_res / finest_res > 1.5:
+                variance_ratio = coarsest_res / finest_res
+                self.results_display.append(
+                    f"⚠ Warning: Significant resolution variance detected ({variance_ratio:.2f}x difference)"
+                )
+                self.results_display.append(
+                    "  Files with coarser resolution will be resampled to match the finest resolution."
+                )
+                self.results_display.append(
+                    "  This may affect data quality. Consider preprocessing files to uniform resolution."
+                )
+            
+            # Check NoData values
+            self.results_display.append("\nNoData value analysis:")
+            nodata_values = [f.get("nodata") for f in self.loaded_files]
+            unique_nodata = set(nodata_values)
+            
+            if len(unique_nodata) > 1:
+                self.results_display.append(
+                    f"⚠ Warning: Files have different NoData values: {unique_nodata}"
+                )
+                self.results_display.append(
+                    "  VRT will use the NoData value from the first file."
+                )
+                self.results_display.append(
+                    "  NoData pixels may not be handled consistently across all files."
+                )
+            elif None in unique_nodata:
+                self.results_display.append("⚠ Warning: Some files have no NoData value defined")
+                self.results_display.append(
+                    "  Pixels with value 0 or other fill values may not be transparent in output."
+                )
+            else:
+                nodata_val = nodata_values[0]
+                self.results_display.append(f"✓ All files use NoData value: {nodata_val}")
 
             # Store analysis results
             self.analysis_results = {
@@ -782,7 +829,7 @@ class RasterMergerTool(BaseTool):
             }
 
             self.results_display.append("\n✓ Analysis complete - Merge operation ready!")
-            self.merge_button.setEnabled(True)
+            self._update_button_states()
 
         except Exception as e:
             self.results_display.append(f"✗ Error during analysis: {str(e)}")
@@ -807,6 +854,23 @@ class RasterMergerTool(BaseTool):
                 for k, v in self.merge_methods.items()
                 if v == merge_method_text
             )
+            
+            # Validate merge method compatibility
+            band_count = self.loaded_files[0]["count"]
+            if merge_method in ["average", "min", "max", "median", "mode", "sum"] and band_count > 1:
+                reply = QMessageBox.question(
+                    self,
+                    "Multi-band Merge Warning",
+                    f"The '{merge_method_text}' method will process each band independently.\n\n"
+                    f"Your files have {band_count} bands. Each band will be merged separately.\n"
+                    f"For RGB/multi-spectral imagery, consider 'First' or 'Last' method to preserve band relationships.\n\n"
+                    f"Continue with '{merge_method_text}' method?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.No:
+                    self.results_display.append("✗ Merge cancelled by user")
+                    return
 
             # Determine output resolution
             if self.resolution_finest_radio.isChecked():
@@ -914,6 +978,14 @@ class RasterMergerTool(BaseTool):
             # Collect input file paths
             input_files = [f["path"] for f in self.loaded_files]
             
+            # Create progress dialog
+            progress = QProgressDialog("Merging rasters...", "Cancel", 0, 0, self)
+            progress.setWindowTitle("Merge Progress")
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setMinimumDuration(0)
+            progress.setValue(0)
+            QCoreApplication.processEvents()
+            
             # Perform merge using GDAL
             success = self._merge_with_gdal(
                 input_files=input_files,
@@ -926,7 +998,10 @@ class RasterMergerTool(BaseTool):
                 output_format=output_format,
                 nodata_value=nodata_value,
                 compression=compression,
+                progress_dialog=progress,
             )
+            
+            progress.close()
             
             if success:
                 self.results_display.append("✓ Merge complete!")
@@ -943,6 +1018,17 @@ class RasterMergerTool(BaseTool):
 
             self.results_display.append(traceback.format_exc())
             QMessageBox.critical(self, "Error", f"Merge failed:\n{str(e)}")
+    
+    def _update_button_states(self):
+        """Update button enabled/disabled states based on current state."""
+        has_files = len(self.loaded_files) > 0
+        has_analysis = self.analysis_results is not None
+        
+        # Analyze button: enabled only if files are loaded
+        self.analyze_button.setEnabled(has_files)
+        
+        # Merge button: enabled only if analysis has been performed
+        self.merge_button.setEnabled(has_analysis)
     
     def validate_inputs(self) -> bool:
         """Validate user inputs before merging rasters.

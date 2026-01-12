@@ -8,8 +8,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox,
-    QListWidget, QTextEdit, QSplitter
+    QListWidget, QTextEdit, QSplitter, QProgressDialog
 )
+from PySide6.QtCore import QCoreApplication
 
 import geopandas as gpd
 import rasterio
@@ -175,6 +176,7 @@ class GISCropperTool(BaseTool):
         
         self.analyze_button = QPushButton("Analyze")
         self.analyze_button.setMinimumHeight(40)
+        self.analyze_button.setEnabled(False)  # Disabled until files are loaded
         self.analyze_button.clicked.connect(self._on_analyze)
         action_buttons_layout.addWidget(self.analyze_button)
         
@@ -219,8 +221,8 @@ class GISCropperTool(BaseTool):
             
             # Clear previous analysis results
             self.analysis_results = {}
-            self.crop_button.setEnabled(False)
             self.results_text.clear()
+            self._update_button_states()
             
     def _on_remove_gis_files(self):
         """Handle Remove Selected button click."""
@@ -235,16 +237,16 @@ class GISCropperTool(BaseTool):
         
         # Clear previous analysis results
         self.analysis_results = {}
-        self.crop_button.setEnabled(False)
         self.results_text.clear()
+        self._update_button_states()
         
     def _on_clear_gis_files(self):
         """Handle Clear All button click."""
         self.gis_files.clear()
         self.gis_files_list.clear()
         self.analysis_results = {}
-        self.crop_button.setEnabled(False)
         self.results_text.clear()
+        self._update_button_states()
         
     def _on_browse_bbox(self):
         """Handle Browse button click for bounding box selection."""
@@ -397,9 +399,8 @@ class GISCropperTool(BaseTool):
         
         self.results_text.append("=== ANALYSIS COMPLETE ===")
         
-        # Enable crop button if we have results
-        if self.analysis_results:
-            self.crop_button.setEnabled(True)
+        # Update button states based on analysis results
+        self._update_button_states()
             
     def _on_crop(self):
         """Crop all GIS files by the bounding box."""
@@ -442,8 +443,24 @@ class GISCropperTool(BaseTool):
         skipped_count = 0
         error_count = 0
         
-        for file_path in self.gis_files:
+        # Create progress dialog
+        progress = QProgressDialog("Cropping files...", "Cancel", 0, len(self.gis_files), self)
+        progress.setWindowTitle("Crop Progress")
+        progress.setWindowModality(2)  # Qt.WindowModal
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        
+        for idx, file_path in enumerate(self.gis_files):
+            # Update progress
+            if progress.wasCanceled():
+                self.results_text.append("\n✗ Cropping cancelled by user")
+                break
+            
+            progress.setValue(idx)
             file_name = Path(file_path).name
+            progress.setLabelText(f"Cropping {idx + 1}/{len(self.gis_files)}: {file_name}")
+            QCoreApplication.processEvents()
+            
             result = self.analysis_results.get(file_path, {})
             status = result.get('status', 'unknown')
             
@@ -476,6 +493,9 @@ class GISCropperTool(BaseTool):
             except Exception as e:
                 self.results_text.append(f"  ✗ ERROR: {str(e)}\n")
                 error_count += 1
+        
+        progress.setValue(len(self.gis_files))
+        progress.close()
         
         # Summary
         self.results_text.append("=== CROPPING COMPLETE ===")
@@ -718,4 +738,11 @@ class GISCropperTool(BaseTool):
         if not self._validate_output_path(str(test_file)):
             return False
         
-        return True
+        return True    
+    def _update_button_states(self):
+        """Update button states based on current tool state."""
+        has_files = len(self.gis_files) > 0
+        has_analysis = bool(self.analysis_results)
+        
+        self.analyze_button.setEnabled(has_files)
+        self.crop_button.setEnabled(has_analysis)
