@@ -627,8 +627,9 @@ class QuadBBoxCreatorTool(BaseTool):
         except Exception as e:
             # Clear preview on error and log for debugging
             logging.debug(f"Preview update failed: {e}")
-            self.preview_area.setText("Preview unavailable")
-            self.preview_perimeter.clear()
+            # Set preview to unavailable state on calculation failure
+            self.preview_area.setText("--")
+            self.preview_perimeter.setText("--")
     
     def validate_inputs(self) -> bool:
         """Validate all inputs before creating the bounding box."""

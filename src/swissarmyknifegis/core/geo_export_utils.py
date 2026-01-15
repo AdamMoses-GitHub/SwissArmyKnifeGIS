@@ -10,10 +10,15 @@ This module provides functions to export GeoDataFrames to various formats:
 - MapInfo TAB (.tab)
 """
 
+import logging
 import zipfile
 from pathlib import Path
 from typing import List, Dict, Optional
 import geopandas as gpd
+
+from .exceptions import ExportError
+
+logger = logging.getLogger(__name__)
 
 
 def sanitize_layer_name(name: str) -> str:
@@ -46,14 +51,15 @@ def export_to_shapefile(
         Path to exported file
         
     Raises:
-        Exception: If export fails
+        ExportError: If export fails
     """
     try:
         gdf_export = gdf.to_crs("EPSG:4326") if convert_to_wgs84 else gdf
         gdf_export.to_file(output_path, driver="ESRI Shapefile")
         return str(output_path)
     except Exception as e:
-        raise Exception(f"Failed to export Shapefile to {output_path}: {str(e)}") from e
+        logger.error(f"Failed to export Shapefile to {output_path}: {str(e)}")
+        raise ExportError(f"Failed to export Shapefile to {output_path}: {str(e)}") from e
 
 
 def export_to_geojson(
@@ -72,14 +78,15 @@ def export_to_geojson(
         Path to exported file
         
     Raises:
-        Exception: If export fails
+        ExportError: If export fails
     """
     try:
         gdf_export = gdf.to_crs("EPSG:4326") if convert_to_wgs84 else gdf
         gdf_export.to_file(output_path, driver="GeoJSON")
         return str(output_path)
     except Exception as e:
-        raise Exception(f"Failed to export GeoJSON to {output_path}: {str(e)}") from e
+        logger.error(f"Failed to export GeoJSON to {output_path}: {str(e)}")
+        raise ExportError(f"Failed to export GeoJSON to {output_path}: {str(e)}") from e
 
 
 def export_to_kml(
@@ -98,14 +105,15 @@ def export_to_kml(
         Path to exported file
         
     Raises:
-        Exception: If export fails
+        ExportError: If export fails
     """
     try:
         gdf_wgs84 = gdf.to_crs("EPSG:4326")
         gdf_wgs84.to_file(output_path, driver="KML")
         return str(output_path)
     except Exception as e:
-        raise Exception(f"Failed to export KML to {output_path}: {str(e)}") from e
+        logger.error(f"Failed to export KML to {output_path}: {str(e)}")
+        raise ExportError(f"Failed to export KML to {output_path}: {str(e)}") from e
 
 
 def export_to_kmz(
@@ -124,7 +132,7 @@ def export_to_kmz(
         Path to exported file
         
     Raises:
-        Exception: If export fails
+        ExportError: If export fails
     """
     temp_kml = output_path.with_suffix('.kml.temp')
     try:
@@ -144,7 +152,8 @@ def export_to_kmz(
         # Clean up temp file if it exists
         if temp_kml.exists():
             temp_kml.unlink()
-        raise Exception(f"Failed to export KMZ to {output_path}: {str(e)}") from e
+        logger.error(f"Failed to export KMZ to {output_path}: {str(e)}")
+        raise ExportError(f"Failed to export KMZ to {output_path}: {str(e)}") from e
 
 
 def export_to_geopackage(
@@ -165,7 +174,7 @@ def export_to_geopackage(
         Path to exported file
         
     Raises:
-        Exception: If export fails
+        ExportError: If export fails
     """
     try:
         gdf_export = gdf.to_crs("EPSG:4326") if convert_to_wgs84 else gdf
@@ -173,7 +182,8 @@ def export_to_geopackage(
         gdf_export.to_file(output_path, driver="GPKG", layer=sanitized_name)
         return str(output_path)
     except Exception as e:
-        raise Exception(f"Failed to export GeoPackage to {output_path}: {str(e)}") from e
+        logger.error(f"Failed to export GeoPackage to {output_path}: {str(e)}")
+        raise ExportError(f"Failed to export GeoPackage to {output_path}: {str(e)}") from e
 
 
 def export_to_gml(
@@ -192,14 +202,15 @@ def export_to_gml(
         Path to exported file
         
     Raises:
-        Exception: If export fails
+        ExportError: If export fails
     """
     try:
         gdf_export = gdf.to_crs("EPSG:4326") if convert_to_wgs84 else gdf
         gdf_export.to_file(output_path, driver="GML")
         return str(output_path)
     except Exception as e:
-        raise Exception(f"Failed to export GML to {output_path}: {str(e)}") from e
+        logger.error(f"Failed to export GML to {output_path}: {str(e)}")
+        raise ExportError(f"Failed to export GML to {output_path}: {str(e)}") from e
 
 
 def export_to_mapinfo(
@@ -218,14 +229,15 @@ def export_to_mapinfo(
         Path to exported file
         
     Raises:
-        Exception: If export fails
+        ExportError: If export fails
     """
     try:
         gdf_export = gdf.to_crs("EPSG:4326") if convert_to_wgs84 else gdf
         gdf_export.to_file(output_path, driver="MapInfo File")
         return str(output_path)
     except Exception as e:
-        raise Exception(f"Failed to export MapInfo TAB to {output_path}: {str(e)}") from e
+        logger.error(f"Failed to export MapInfo TAB to {output_path}: {str(e)}")
+        raise ExportError(f"Failed to export MapInfo TAB to {output_path}: {str(e)}") from e
 
 
 def export_geodataframe_multi(
@@ -300,6 +312,10 @@ def export_geodataframe_multi(
         
         return exported_files
         
+    except ExportError:
+        # Re-raise ExportError as-is (already logged)
+        raise
     except Exception as e:
-        # Re-raise with context about which format failed
-        raise Exception(f"Export failed after {len(exported_files)} successful exports: {str(e)}") from e
+        # Wrap any other exceptions
+        logger.error(f"Export failed after {len(exported_files)} successful exports: {str(e)}")
+        raise ExportError(f"Export failed after {len(exported_files)} successful exports: {str(e)}") from e

@@ -588,7 +588,10 @@ class GISCropperTool(BaseTool):
                     clipped, _ = mask(src, bbox_shapes, crop=False, filled=True)
                     clipped_masked = np.ma.masked_array(clipped[0], mask=(clipped[0] == src.nodata) if src.nodata is not None else False)
                     inside_pixels = np.count_nonzero(~clipped_masked.mask) if hasattr(clipped_masked, 'mask') else clipped_masked.size
-                except Exception:
+                except Exception as e:
+                    # Log masking failure but continue with conservative estimate
+                    import logging
+                    logging.debug(f"Pixel masking calculation failed: {e}")
                     inside_pixels = 0
                 result.update(self.analyze_spatial_relationship(
                     raster_geom, bbox_geom, file_bounds, bbox_bounds,

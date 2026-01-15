@@ -2,6 +2,7 @@
 Bounding Box Creator Tool - Creates bounding boxes from centroid and dimensions.
 """
 
+import logging
 from pathlib import Path
 from typing import Optional, Tuple
 import zipfile
@@ -476,8 +477,7 @@ class BoundingBoxCreatorTool(BaseTool):
         except Exception as e:
             # If calculation fails, clear preview and log error
             self._clear_preview()
-            # Optionally log error for debugging (silently fail for user experience)
-            import logging
+            # Log error for debugging without interrupting user experience
             logging.debug(f"Preview calculation error: {e}")
     
     def _clear_preview(self):

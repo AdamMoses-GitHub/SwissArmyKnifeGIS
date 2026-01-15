@@ -5,6 +5,7 @@ Batch reproject GIS files (vector and raster) between different coordinate refer
 """
 
 import os
+import logging
 from typing import Optional, List, Dict, Any
 
 from PySide6.QtWidgets import (
@@ -22,6 +23,9 @@ from rasterio.warp import calculate_default_transform, reproject, Resampling
 from osgeo import gdal, gdalconst
 
 from .base_tool import BaseTool
+from swissarmyknifegis.core import CRSError, log_and_notify, GDALError
+
+logger = logging.getLogger(__name__)
 
 # Type hints
 from typing import TYPE_CHECKING
@@ -258,7 +262,10 @@ class CoordinateConverterTool(BaseTool):
                     crs = CRS.from_string(crs_str)
                     display_name = f"{crs.name} ({crs_str})"
                     self.output_crs_combo.addItem(display_name, crs_str)
-                except:
+                except Exception as e:
+                    # Fallback to raw CRS string if parsing fails
+                    import logging
+                    logging.debug(f"Failed to parse CRS name for {crs_str}: {e}")
                     self.output_crs_combo.addItem(crs_str, crs_str)
         
         # Set default to first common CRS
@@ -366,7 +373,12 @@ class CoordinateConverterTool(BaseTool):
             return None
             
         except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to read file:\n{file_path}\n\n{str(e)}")
+            log_and_notify(
+                e,
+                f"Failed to read file. Please ensure it's a valid GIS file.",
+                parent=self,
+                log_level=logging.ERROR
+            )
             return None
     
     def _update_table(self):
