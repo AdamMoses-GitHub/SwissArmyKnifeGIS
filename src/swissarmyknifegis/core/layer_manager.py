@@ -40,16 +40,16 @@ class Layer:
         self.crs = crs
         self._data = None  # Placeholder for loaded data
         
-    def load_data(self):
+    def load_data(self) -> None:
         """Load the layer data from file."""
         # To be implemented with GDAL/GeoPandas/Rasterio
         pass
         
-    def unload_data(self):
+    def unload_data(self) -> None:
         """Unload the layer data from memory."""
         self._data = None
         
-    def get_extent(self):
+    def get_extent(self) -> Optional[tuple]:
         """
         Get the spatial extent of this layer.
         
@@ -70,10 +70,10 @@ class LayerManager:
     Provides methods to add, remove, reorder, and query layers.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self._layers: List[Layer] = []
         
-    def add_layer(self, layer: Layer, position: Optional[int] = None):
+    def add_layer(self, layer: Layer, position: Optional[int] = None) -> None:
         """
         Add a layer to the manager.
         
@@ -86,13 +86,13 @@ class LayerManager:
         else:
             self._layers.insert(position, layer)
             
-    def remove_layer(self, layer: Layer):
+    def remove_layer(self, layer: Layer) -> None:
         """Remove a layer from the manager."""
         if layer in self._layers:
             layer.unload_data()
             self._layers.remove(layer)
             
-    def remove_layer_by_name(self, name: str):
+    def remove_layer_by_name(self, name: str) -> None:
         """Remove a layer by its name."""
         layer = self.get_layer_by_name(name)
         if layer:
@@ -117,7 +117,7 @@ class LayerManager:
         """Get all layers of a specific type."""
         return [layer for layer in self._layers if layer.layer_type == layer_type]
         
-    def move_layer(self, layer: Layer, new_position: int):
+    def move_layer(self, layer: Layer, new_position: int) -> None:
         """
         Move a layer to a new position in the stack.
         
@@ -129,13 +129,13 @@ class LayerManager:
             self._layers.remove(layer)
             self._layers.insert(new_position, layer)
             
-    def clear_all(self):
+    def clear_all(self) -> None:
         """Remove all layers."""
         for layer in self._layers:
             layer.unload_data()
         self._layers.clear()
         
-    def get_combined_extent(self):
+    def get_combined_extent(self) -> Optional[tuple]:
         """
         Get the combined spatial extent of all visible layers.
         
@@ -155,7 +155,7 @@ class LayerManager:
         
         return (minx, miny, maxx, maxy)
         
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._layers)
         
     def __iter__(self):

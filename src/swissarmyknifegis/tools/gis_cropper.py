@@ -1,8 +1,9 @@
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any, Tuple, Union
 import traceback
 import tempfile
 import json
+import logging
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -16,10 +17,13 @@ import geopandas as gpd
 import rasterio
 from rasterio.mask import mask
 from shapely.geometry import box, mapping
+from shapely.geometry.base import BaseGeometry
 import numpy as np
 from osgeo import gdal, ogr, osr
 
 from swissarmyknifegis.tools.base_tool import BaseTool
+
+logger = logging.getLogger(__name__)
 
 # Configure GDAL to use Python exceptions
 gdal.UseExceptions()
@@ -29,13 +33,22 @@ class GISCropperTool(BaseTool):
     """
     Tool for analyzing and cropping GIS files by bounding box.
     """
-    def analyze_spatial_relationship(self, file_geom, bbox_geom, file_bounds, bbox_bounds, total_area=None, inside_area=None, total_pixels=None, inside_pixels=None):
+    def analyze_spatial_relationship(
+        self,
+        file_geom: Union[BaseGeometry, gpd.GeoDataFrame],
+        bbox_geom: Union[BaseGeometry, gpd.GeoDataFrame],
+        file_bounds: Tuple[float, float, float, float],
+        bbox_bounds: Tuple[float, float, float, float],
+        total_area: Optional[float] = None,
+        inside_area: Optional[float] = None,
+        total_pixels: Optional[int] = None,
+        inside_pixels: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
         Shared logic for overlap/containment and percentage calculation.
         For vector: use area, for raster: use pixel counts.
         """
-        from shapely.geometry.base import BaseGeometry
-        result = {}
+        result: Dict[str, Any] = {}
         # Percentage calculation
         if total_area is not None and inside_area is not None:
             percentage = (inside_area / total_area * 100) if total_area > 0 else 0.0
@@ -56,7 +69,7 @@ class GISCropperTool(BaseTool):
                 result['percentage'] = 0.0
                 return result
             result['status'] = 'partial'
-            overlap_info = {}
+            overlap_info: Dict[str, float] = {}
             if file_bounds[0] < bbox_bounds[0]:
                 overlap_info['extends_west'] = bbox_bounds[0] - file_bounds[0]
             if file_bounds[2] > bbox_bounds[2]:
@@ -68,16 +81,15 @@ class GISCropperTool(BaseTool):
             result['overlap_info'] = overlap_info
         return result
 
-    def ensure_same_crs(self, gdf, target_crs):
+    def ensure_same_crs(self, gdf: gpd.GeoDataFrame, target_crs: Optional[str]) -> gpd.GeoDataFrame:
         """Return GeoDataFrame in target_crs if needed and possible."""
         if gdf.crs and target_crs and gdf.crs != target_crs:
             return gdf.to_crs(target_crs)
         return gdf
 
-    def _get_shapely_geom(self, geom):
-        # Helper to extract a shapely geometry from a GeoDataFrame, Series, or geometry
+    def _get_shapely_geom(self, geom: Any) -> BaseGeometry:
+        """Helper to extract a shapely geometry from a GeoDataFrame, Series, or geometry."""
         import pandas as pd
-        from shapely.geometry.base import BaseGeometry
         if isinstance(geom, BaseGeometry):
             return geom
         if isinstance(geom, pd.Series) or hasattr(geom, 'iloc'):
@@ -94,18 +106,18 @@ class GISCropperTool(BaseTool):
     - Crop all files by the bounding box
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[Any] = None) -> None:
         super().__init__(parent)
-        self.gis_files = []
-        self.bbox_file = None
-        self.bbox_geometry = None
-        self.analysis_results = {}
+        self.gis_files: List[str] = []
+        self.bbox_file: Optional[str] = None
+        self.bbox_geometry: Optional[BaseGeometry] = None
+        self.analysis_results: Dict[str, Dict[str, Any]] = {}
         
     def get_tool_name(self) -> str:
         """Return the display name for this tool."""
         return "GIS Cropper"
         
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         """Set up the user interface."""
         main_layout = QVBoxLayout(self)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -202,7 +214,7 @@ class GISCropperTool(BaseTool):
         # Add stretch to push everything to the top
         main_layout.addStretch()
         
-    def _on_add_gis_files(self):
+    def _on_add_gis_files(self) -> None:
         """Handle Add Files button click."""
         last_path = self._get_last_path("paths/input/gis_files")
         file_paths, _ = QFileDialog.getOpenFileNames(
@@ -224,7 +236,7 @@ class GISCropperTool(BaseTool):
             self.results_text.clear()
             self._update_button_states()
             
-    def _on_remove_gis_files(self):
+    def _on_remove_gis_files(self) -> None:
         """Handle Remove Selected button click."""
         selected_items = self.gis_files_list.selectedItems()
         if not selected_items:

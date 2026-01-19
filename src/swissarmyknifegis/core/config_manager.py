@@ -1,9 +1,12 @@
 """Configuration Manager - Persistent storage for user preferences and paths."""
 
 import json
+import logging
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Dict
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigManager:
@@ -18,20 +21,20 @@ class ConfigManager:
             cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize configuration manager."""
         if self._initialized:
             return
             
         self._initialized = True
-        self._config: dict = {}
+        self._config: Dict[str, Any] = {}
         self._config_dir = Path.home() / ".swissarmyknifegis"
         self._config_file = self._config_dir / "config.json"
         
         # Load existing config or create new one
         self.load()
     
-    def load(self):
+    def load(self) -> None:
         """Load configuration from JSON file."""
         try:
             if self._config_file.exists():
@@ -70,15 +73,12 @@ class ConfigManager:
                 "preferences": {},
             }
     
-    def save(self):
+    def save(self) -> None:
         """Save configuration to JSON file.
         
         Raises:
             IOError: If unable to write configuration file
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         try:
             # Create config directory if it doesn't exist
             self._config_dir.mkdir(parents=True, exist_ok=True)
@@ -114,7 +114,7 @@ class ConfigManager:
         
         return value
     
-    def set(self, key: str, value: Any):
+    def set(self, key: str, value: Any) -> None:
         """Set configuration value by hierarchical key.
         
         Args:

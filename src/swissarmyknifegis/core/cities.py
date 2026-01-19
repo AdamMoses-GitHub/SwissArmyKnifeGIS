@@ -5,7 +5,8 @@ Provides coordinates for major cities worldwide to facilitate
 quick centroid selection in GIS tools.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional, Any
+from PySide6.QtWidgets import QComboBox
 
 
 def get_major_cities() -> Dict[str, Tuple[float, float]]:
@@ -90,7 +91,7 @@ def get_cities_grouped() -> List[Tuple[str, List[Tuple[str, float, float]]]]:
     ]
 
 
-def populate_city_combo(combo_widget, placeholder_text: str = "-- Select City --"):
+def populate_city_combo(combo_widget: QComboBox, placeholder_text: str = "-- Select City --") -> None:
     """
     Populate a QComboBox with major cities organized by region.
     
