@@ -69,16 +69,11 @@ def validate_path(
                             raise FileOperationError(f"Parent directory does not exist: {path_obj.parent}")
                     else:
                         if not path_obj.parent.exists():
-                            if create_parents:
-                                try:
-                                    path_obj.parent.mkdir(parents=True, exist_ok=True)
-                                except OSError as e:
-                                    raise FileOperationError(f"Cannot create parent directory: {e}") from e
-                            else:
+                            if not create_parents:
                                 raise FileOperationError(f"Parent directory does not exist: {path_obj.parent}")
                 
                 # Create parents if requested
-                if create_parents and not path_obj.exists():
+                if create_parents and not path_obj.parent.exists():
                     try:
                         path_obj.parent.mkdir(parents=True, exist_ok=True)
                     except OSError as e:
