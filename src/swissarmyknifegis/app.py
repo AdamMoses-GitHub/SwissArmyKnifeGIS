@@ -30,9 +30,10 @@ def run_app():
         """Safely save configuration with user notification on failure."""
         try:
             config.save()
+            logger.debug("Configuration save initiated")
             logger.info("Configuration saved successfully")
         except Exception as e:
-            logger.error(f"Failed to save configuration: {e}", exc_info=True)
+            logger.warning(f"Failed to save configuration: {e}", exc_info=True)
             QMessageBox.warning(
                 None,
                 "Configuration Save Failed",
