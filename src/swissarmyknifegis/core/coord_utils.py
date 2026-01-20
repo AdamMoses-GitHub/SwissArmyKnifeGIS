@@ -9,6 +9,7 @@ This module provides functions for:
 
 from typing import Tuple, Optional
 from pyproj import Transformer
+from .exceptions import CoordinateError
 
 
 def calculate_utm_zone(longitude: float) -> int:
@@ -90,7 +91,7 @@ def transform_coordinates(
         )
         return transformer.transform(x, y)
     except Exception as e:
-        raise Exception(
+        raise CoordinateError(
             f"Failed to transform coordinates from {source_crs} to {target_crs}: {str(e)}"
         ) from e
 
