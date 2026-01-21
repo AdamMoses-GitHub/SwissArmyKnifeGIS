@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from swissarmyknifegis.tools.base_tool import BaseTool
+from swissarmyknifegis import __version__
 
 
 class AboutTab(BaseTool):
@@ -34,7 +35,7 @@ class AboutTab(BaseTool):
         about_text = QTextEdit()
         about_text.setReadOnly(True)
         about_text.setText(
-            "SwissArmyKnifeGIS\n\n"
+            f"SwissArmyKnifeGIS v{__version__}\n\n"
             "Hi, I'm Adam Moses. I got tired of wrestling with expensive GIS software "
             "and complicated command-line tools just to do basic geospatial tasks. "
             "So I built SwissArmyKnifeGIS—a no-nonsense toolkit that handles the common stuff: "
