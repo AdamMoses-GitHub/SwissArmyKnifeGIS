@@ -2,12 +2,10 @@
 Base class for GIS tool tabs.
 """
 
-import os
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import Optional
 from PySide6.QtWidgets import QWidget, QFileDialog
-from PySide6.QtCore import QObject
 from swissarmyknifegis.core.config_manager import get_config_manager
 
 

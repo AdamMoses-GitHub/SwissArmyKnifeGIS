@@ -4,7 +4,6 @@ Coordinate System Converter Tool
 Batch reproject GIS files (vector and raster) between different coordinate reference systems (CRS).
 """
 
-import os
 import logging
 from typing import Optional, List, Dict, Any
 
@@ -12,8 +11,8 @@ from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QComboBox, QLineEdit, QPushButton, QTextEdit,
     QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QCheckBox, QProgressDialog
-)
+    QHeaderView, QAbstractItemView, QCheckBox
+)  
 from PySide6.QtCore import Qt, QCoreApplication
 
 from pyproj import CRS
@@ -26,11 +25,6 @@ from .base_tool import BaseTool
 from swissarmyknifegis.core import CRSError, log_and_notify, GDALError
 
 logger = logging.getLogger(__name__)
-
-# Type hints
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    pass
 
 # Configure GDAL to use Python exceptions
 gdal.UseExceptions()
