@@ -6,6 +6,8 @@ _Because learning QGIS just to crop a raster is like buying a Ferrari to get gro
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+![App Screenshot](./screenshot.jpg)
+
 A lightweight, user-friendly GIS toolkit with a clean GUI for working with raster and vector geospatial data. Skip the complex menus and overwhelming buttons—just get your spatial analysis done without the corporate bloat.
 
 ## About This Project
@@ -19,19 +21,20 @@ The goal is simple: make GIS accessible. Whether you're a seasoned analyst or ju
 ## What It Does
 
 ### The Main Features
-- **Tabbed Interface**: Keep your workflows organized without drowning in windows
+- **Dual Bounding Box Tools**: Create bounding boxes from centroid+dimensions OR from four arbitrary corner points
 - **Raster Tools**: Crop, merge, and analyze raster data (GeoTIFF, TIFF, etc.)
 - **Vector Support**: Work with shapefiles, GeoJSON, and other vector formats
-- **CRS Converter**: Transform coordinates between any projection—because WGS84 isn't the answer to everything
+- **CRS Converter**: Transform coordinates between any projection—batch reproject multiple files at once
 - **Interactive Map Canvas**: Pan, zoom, and actually see what you're working with
-- **Cross-Platform**: Windows, macOS, Linux—it just works
+- **Export Flexibility**: Output to KML, Shapefile, GeoJSON, or multiple formats simultaneously
 
 ### The Nerdy Stuff
 - Built on GDAL and GeoPandas so you know it's doing real geospatial work
-- GPU-aware raster processing when available
-- Layer management without the wizard dialogs
-- Real-time coordinate display as you explore
 - Batch processing for when you have 500 files that need the same treatment
+- Multiple resampling methods (nearest, bilinear, cubic, etc.) for raster reprojection
+- Spatial overlap analysis shows percentage of data within crop regions
+- City selector with major world cities for quick bounding box creation
+- Real-time preview updates as you configure tools
 
 ## Quick Start
 
@@ -56,11 +59,13 @@ python -m swissarmyknifegis
 
 | Component | Purpose | Why This One |
 |-----------|---------|--------------|
-| GDAL | Raster/Vector I/O | Industry standard, handles everything |
-| GeoPandas | Vector analysis | Pandas for geography, basically |
-| Rasterio | Raster data access | Simple, Pythonic, no drama |
-| PySide6 | GUI framework | Qt without the licensing headaches |
-| Shapely | Geometric operations | Solid, reliable, does what it says |
+| GDAL 3.6+ | Raster/Vector I/O | Industry standard, handles everything |
+| GeoPandas 0.14+ | Vector analysis | Pandas for geography, basically |
+| Rasterio 1.3.9+ | Raster data access | Simple, Pythonic, no drama |
+| PySide6 6.6+ | GUI framework | Qt without the licensing headaches |
+| Shapely 2.0+ | Geometric operations | Solid, reliable, does what it says |
+| PyProj 3.6+ | CRS transformations | Handles every projection you throw at it |
+| Rtree 1.1+ | Spatial indexing | Fast spatial queries without the wait |
 
 ## What Else?
 

@@ -2,20 +2,25 @@
 
 ## Features
 
-- **Tabbed Interface**: Organize different GIS tools and workflows in separate tabs
-- **Raster Support**: Read, write, and analyze raster data using GDAL and Rasterio
-- **Vector Support**: Process vector data with GeoPandas, Shapely, and Fiona
-- **Interactive Map Canvas**: Pan, zoom, and visualize GIS layers
+- **Dual Bounding Box Tools**: Create bounding boxes from centroid+dimensions OR from four arbitrary corner points
+- **Raster Support**: Read, write, crop, and merge raster data using GDAL and Rasterio
+- **Vector Support**: Process and crop vector data with GeoPandas, Shapely, and Fiona
+- **Batch CRS Conversion**: Reproject multiple raster/vector files between coordinate systems
+- **Interactive Map Canvas**: Pan, zoom, and visualize GIS layers in real-time
+- **Spatial Analysis**: Analyze overlap percentages and containment relationships
+- **Multiple Export Formats**: Output to KML, Shapefile, GeoJSON, or all three at once
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 
 ## Installation
 
-### Using Conda (Recommended)
+### Method A: Using Conda (Recommended)
+
+Conda provides the most reliable installation because GDAL can be tricky to install via pip alone.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/swissarmyknifegis.git
-cd swissarmyknifegis
+git clone https://github.com/AdamMoses-GitHub/SwissArmyKnifeGIS.git
+cd SwissArmyKnifeGIS
 
 # Create and activate conda environment
 conda env create -f environment.yml
@@ -25,12 +30,14 @@ conda activate swissarmyknifegis
 pip install -e .
 ```
 
-### Using pip
+### Method B: Using pip (Quick)
+
+If you already have GDAL installed system-wide or prefer pip:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/swissarmyknifegis.git
-cd swissarmyknifegis
+git clone https://github.com/AdamMoses-GitHub/SwissArmyKnifeGIS.git
+cd SwissArmyKnifeGIS
 
 # Create virtual environment
 python -m venv venv
@@ -40,85 +47,123 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e .
 ```
 
-## Usage
+**Note**: If pip installation fails on GDAL, use Method A (Conda) instead.
 
-### Running the Application
+## Usage - Execution
+
+Launch the application using either of these methods:
 
 ```bash
-# As a module
+# Method 1: As a Python module
 python -m swissarmyknifegis
 
-# Or using the installed command
+# Method 2: Using the installed command (if installed via pip)
 swissarmyknifegis
 ```
 
-### Tool Workflows
+The application opens with a tabbed interface containing five GIS tools plus an About tab.
 
-The application features a tabbed interface with four main tools. Here are common workflows for each:
+## Usage - Workflows
 
-#### 1. Bounding Box Creator
+The application features a tabbed interface with five main tools. Here are common workflows for each:
 
-**Scenario**: You need to define an area of interest for a remote sensing analysis around a city.
+#### 1. Bounding Box Creator (Centroid-Based)
 
-Workflow:
-1. Open the **Bounding Box Creator** tab
-2. Select your coordinate system (WGS84 for global coordinates, UTM for a specific zone)
-3. Enter the center point coordinates (latitude/longitude or UTM easting/northing)
-4. Specify the dimensions you want (e.g., 10 km × 10 km around your study area)
-5. Choose output format(s): KML for Google Earth viewing, Shapefile for GIS software, or GeoJSON for web applications
-6. Click "Create Bounding Box" and save your output
-7. Use the generated file as an overlay in other tools or in external GIS software
+**Scenario**: You need to define a precise rectangular area of interest around a specific location for downloading satellite imagery.
 
-**Example Use Case**: You're planning a field survey in an area 50 km × 50 km around a specific location. Use this tool to create a boundary shapefile that you can share with your team.
+**Workflow**:
+1. Open the **BBox - Centroid** tab
+2. Choose your coordinate system: Lon/Lat (WGS84) or UTM
+3. Enter centroid coordinates manually OR select from the city dropdown (includes 50+ major world cities)
+4. Specify dimensions (width × height) in meters or kilometers
+5. Preview the bounding box on the map canvas
+6. Select output format(s): KML, Shapefile, GeoJSON, or all three
+7. Click "Create Bounding Box" and choose your save location
+
+**Example Use Case**: You're researching urban heat islands in Chicago. Select "Chicago" from the city dropdown, set dimensions to 20 km × 20 km, and export as Shapefile to use as a download boundary for Landsat imagery.
+
+#### 2. 4-Point Bounding Box Creator
+
+**Scenario**: Your study area is not rectangular or you have specific corner coordinates from a survey that define an arbitrary quadrilateral.
+
+**Workflow**:
+1. Open the **BBox - Points** tab
+2. Select coordinate system (Lon/Lat or UTM with zone specification)
+3. Enter coordinates for all four corner points (SW, SE, NE, NW) manually OR select a city to auto-populate approximate bounds
+4. The tool automatically creates a polygon connecting these four points
+5. Preview the polygon on the interactive map
+6. Choose output format(s): KML, Shapefile, GeoJSON
+7. Click "Create Bounding Box" to save
+
+**Example Use Case**: You have GPS coordinates from four corner markers placed in the field that define your agricultural study plot. Input these exact coordinates to create a polygon boundary that matches your field layout.
 
 #### 2. GIS Cropper
 
-**Scenario**: You have satellite imagery or a large vector dataset that covers a wide area, but you only need a specific region.
+**Scenario**: You have a massive satellite image or vector dataset covering an entire continent, but you only need data for a small region.
 
-Workflow:
+**Workflow**:
 1. Open the **GIS Cropper** tab
-2. Load the file you want to crop (raster like GeoTIFF, or vector like Shapefile)
-3. Either:
-   - Draw a bounding box directly on the map canvas, or
-   - Load a shapefile/GeoJSON that defines your crop area
-4. Analyze the spatial relationship to see what percentage of your file falls within the crop area
-5. Click "Crop" to extract only the data within your defined area
-6. Save the cropped output in your preferred format
-7. The resulting file will be smaller and faster to work with
+2. Load the file you want to crop (supports GeoTIFF, TIFF for rasters; Shapefile, GeoJSON for vectors)
+3. Define your crop area using ONE of these methods:
+   - Draw a bounding box directly on the map canvas (click and drag)
+   - Load an existing shapefile or GeoJSON that defines your area of interest
+4. Click "Analyze" to see spatial overlap statistics:
+   - Percentage of your input file that falls within the crop area
+   - Whether the file is fully inside, partially overlapping, or outside the crop region
+5. Review the analysis results
+6. Click "Crop" to extract only the data within your defined area
+7. Choose output location and format
 
-**Example Use Case**: You downloaded a Landsat scene covering three states, but you only need the portion covering your county. Use the cropper to extract just your area, reducing file size from 2GB to 100MB.
+**Example Use Case**: You downloaded a 5 GB Sentinel-2 scene covering three states, but you only need the portion covering your 500 km² national park. Load the scene, draw a box around the park, analyze (shows 3% overlap), crop, and reduce file size to 150 MB.
 
 #### 3. Coordinate System Converter
 
-**Scenario**: Your project team uses different coordinate systems—your GIS analyst prefers WGS84, but your engineering team needs UTM Zone 32N.
+**Scenario**: Your collaborators use different coordinate systems and you need to reproject your entire dataset to match their requirements.
 
-Workflow:
-1. Open the **Coordinate Converter** tab
-2. Load your file(s) that need reprojection (supports batch processing multiple files)
-3. Select the current coordinate system (if not auto-detected)
-4. Choose your target coordinate system from the dropdown (includes common presets like UTM zones, Web Mercator, etc.)
-5. For raster files, select your resampling method (nearest neighbor for categorical data, bilinear for continuous)
-6. Click "Reproject" to transform your data
-7. Save the reprojected file—your coordinates are now in the new system
+**Workflow**:
+1. Open the **CRS Converter** tab
+2. Click "Add Files" to load one or more files (supports batch processing of raster and vector files)
+3. The tool auto-detects the current CRS for each file (or you can manually specify if needed)
+4. Select the target CRS from the dropdown:
+   - Common presets include WGS84, Web Mercator, UTM zones (30N-33N, etc.), NAD83, British National Grid
+   - Or enter a custom EPSG code
+5. For raster files, choose a resampling method:
+   - **Nearest Neighbor**: For categorical data (land cover, classifications)
+   - **Bilinear**: For continuous data (elevation, temperature)
+   - **Cubic**: Higher quality for imagery
+6. (Optional) Configure compression and multithreading options
+7. Select output directory
+8. Click "Reproject" to transform all files
+9. Results display shows success/failure for each file with detailed messages
 
-**Example Use Case**: Your vector data is in EPSG:4326 (WGS84), but you need it in EPSG:32633 (UTM Zone 33N) for accurate distance measurements and area calculations in your region.
+**Example Use Case**: Your team receives 50 shapefiles in various UTM zones from different field surveys. You need everything in WGS84 (EPSG:4326) for web mapping. Load all 50 files, select WGS84 as target, click Reproject, and the tool processes the entire batch in minutes.
 
 #### 4. Raster Merger
 
-**Scenario**: You have multiple satellite tiles or aerial photos covering a larger area that you want to combine into a single seamless image.
+**Scenario**: You have multiple satellite tiles or drone imagery covering adjacent areas that need to be stitched together into a single seamless raster.
 
-Workflow:
+**Workflow**:
 1. Open the **Raster Merger** tab
-2. Add all the raster files you want to merge (typically 2+ GeoTIFFs covering adjacent areas)
-3. The tool analyzes the spatial extent of all files and shows overlap information
+2. Click "Add Rasters" to load all files you want to merge (typically 2+ GeoTIFFs covering adjacent or overlapping areas)
+3. The tool automatically analyzes:
+   - Spatial extent of all input files
+   - Overlap regions and percentage
+   - CRS consistency (warns if files use different projections)
 4. Configure merge options:
-   - Choose how to handle overlapping pixels (average, first file, last file)
-   - Set output resolution and data type
-   - Select output format (GeoTIFF recommended for analysis)
-5. Click "Merge Rasters" to create your composite
-6. Save the merged output—you now have a single, seamless image covering the entire region
+   - **Merge Method**: How to handle overlapping pixels:
+     - First: Use pixel from first file
+     - Last: Use pixel from last file
+     - Min/Max: Take minimum/maximum value
+     - Sum: Add values together (useful for accumulation)
+   - **Output Resolution**: Match input or specify custom resolution
+   - **Output Data Type**: uint8, uint16, int16, float32, float64
+   - **Compression**: LZW or DEFLATE for smaller file sizes
+5. Select output directory and filename
+6. Click "Merge Rasters" to create the composite
+7. Progress dialog shows merging status
+8. Save the merged output—one seamless raster covering the entire region
 
-**Example Use Case**: You purchased four tiles of high-resolution imagery (0.5m resolution) from a drone survey. Use the merger to stitch them together into one orthomosaic that covers your entire 2 km² study site.
+**Example Use Case**: Your drone survey produced 12 individual GeoTIFF tiles (each 1 GB) covering a 5 km² mining site. Use the merger with "First" method and LZW compression to create a single 8 GB orthomosaic for analysis and visualization.
 
 ## Development
 
@@ -127,27 +172,43 @@ Workflow:
 ```
 SwissArmyKnifeGIS/
 ├── src/swissarmyknifegis/
-│   ├── __init__.py            # Package initialization
-│   ├── __main__.py            # Entry point (allows python -m swissarmyknifegis)
-│   ├── app.py                 # Application initialization and setup
+│   ├── __init__.py              # Package initialization
+│   ├── __main__.py              # Entry point (allows python -m swissarmyknifegis)
+│   ├── app.py                   # Application initialization and configuration
 │   ├── gui/
-│   │   ├── main_window.py     # Main application window with tab interface
-│   │   ├── map_canvas.py      # Interactive map visualization
+│   │   ├── main_window.py       # Main window with tabbed interface
+│   │   ├── map_canvas.py        # Interactive map visualization
 │   │   └── __init__.py
 │   ├── tools/
-│   │   ├── base_tool.py       # Base class for all tools
-│   │   ├── bbox_creator.py    # Bounding Box Creator tool
-│   │   ├── gis_cropper.py     # GIS Cropper tool
-│   │   ├── crs_converter.py   # Coordinate System Converter tool
-│   │   ├── raster_merger.py   # Raster Merger tool
+│   │   ├── base_tool.py         # Base class for all tools
+│   │   ├── bbox_creator.py      # Bounding Box Creator (centroid-based)
+│   │   ├── quad_bbox_creator.py # 4-Point Bounding Box Creator
+│   │   ├── gis_cropper.py       # GIS Cropper tool
+│   │   ├── crs_converter.py     # Coordinate System Converter
+│   │   ├── raster_merger.py     # Raster Merger tool
+│   │   ├── about_tab.py         # About tab with project info
 │   │   └── __init__.py
 │   ├── core/
-│   │   ├── config_manager.py  # Configuration management
-│   │   ├── layer_manager.py   # Layer handling utilities
-│   │   ├── cities.py          # City data and lookup
+│   │   ├── config_manager.py    # Configuration persistence
+│   │   ├── layer_manager.py     # Layer handling utilities
+│   │   ├── coord_utils.py       # Coordinate transformation utilities
+│   │   ├── geo_export_utils.py  # Multi-format export functions
+│   │   ├── gdal_utils.py        # GDAL helper functions
+│   │   ├── cities.py            # Major city database
+│   │   ├── validation.py        # Input validation
+│   │   ├── error_utils.py       # Error handling utilities
+│   │   ├── exceptions.py        # Custom exceptions
 │   │   └── __init__.py
-│   ├── resources/
-│   │   └── __init__.py        # Place for icons, stylesheets, etc.
+│   └── resources/
+│       └── __init__.py          # Reserved for icons, stylesheets
+├── environment.yml              # Conda environment specification
+├── pyproject.toml               # Project metadata and pip dependencies
+├── setup.py                     # Installation script (delegates to pyproject.toml)
+├── README.md                    # Project overview
+├── INSTALL_AND_USAGE.md         # This file
+├── LICENSE                      # MIT License
+└── TODO.md                      # Future features and roadmap
+```
 │   └── __pycache__/
 ├── environment.yml            # Conda environment specification
 ├── pyproject.toml             # Project metadata and dependencies
@@ -159,35 +220,67 @@ SwissArmyKnifeGIS/
 ```
 
 **Key Directories Explained**:
-- **gui/** - Contains the Qt/PySide6 user interface components including the main window and interactive map
-- **tools/** - Each tool is implemented as a class inheriting from `BaseTool`, providing a consistent interface
-- **core/** - Shared utilities for configuration, layer management, and data handling
-- **resources/** - Reserved for UI resources (icons, stylesheets, images)
-- **src/swissarmyknifegis/egg-info/** - Auto-generated by pip during installation
+- **gui/** - Qt/PySide6 UI components including the main tabbed window and interactive map canvas
+- **tools/** - Each tool inherits from `BaseTool` for consistent interface and shared functionality
+- **core/** - Shared utilities for coordinate transformations, GDAL operations, config management, and validation
+- **resources/** - Reserved for UI assets (icons, stylesheets, images) - currently empty
 
 ### Running Tests
 
 ```bash
+# Activate your environment first
+conda activate swissarmyknifegis
+
+# Run tests with pytest
 pytest
+
+# Run with coverage report
+pytest --cov=swissarmyknifegis
 ```
 
 ### Code Style
 
-This project uses Black for code formatting:
+This project uses Black for code formatting and Flake8 for linting:
 
 ```bash
+# Format code
 black src/ tests/
+
+# Check code style
+flake8 src/ tests/
+
+# Type checking with mypy
+mypy src/
 ```
 
 ## Requirements
 
-- Python >= 3.10
-- PySide6 >= 6.6.0
-- GDAL >= 3.6.0
-- GeoPandas >= 0.14.0
-- Rasterio >= 1.3.9
-- Shapely >= 2.0.0
-- See [environment.yml](environment.yml) for complete list
+### Core Dependencies
+- **Python** >= 3.10
+- **GDAL** >= 3.6.0 (raster/vector I/O and transformations)
+- **PySide6** >= 6.6.0 (Qt GUI framework)
+- **GeoPandas** >= 0.14.0 (vector data operations)
+- **Rasterio** >= 1.3.9 (raster data access)
+- **Shapely** >= 2.0.0 (geometric operations)
+- **Fiona** >= 1.9.5 (vector file I/O)
+- **PyProj** >= 3.6.0 (coordinate transformations)
+- **NumPy** >= 1.24.0 (numerical operations)
+- **Pandas** >= 2.0.0 (data manipulation)
+- **Matplotlib** >= 3.8.0 (visualization)
+- **Pillow** >= 10.0.0 (image processing)
+- **Rtree** >= 1.1.0 (spatial indexing)
+
+See [environment.yml](environment.yml) or [pyproject.toml](pyproject.toml) for the complete dependency list.
+
+## Troubleshooting
+
+**GDAL installation fails with pip**: Use Conda (Method A) instead. GDAL has complex system dependencies that Conda handles automatically.
+
+**"ModuleNotFoundError: No module named 'osgeo'"**: Your GDAL installation is incomplete. Reinstall using: `conda install -c conda-forge gdal`
+
+**GUI doesn't appear on macOS**: Try running with: `pythonw -m swissarmyknifegis` instead of `python -m swissarmyknifegis`
+
+**Coordinate transformation errors**: Ensure PyProj datum grids are installed: `conda install -c conda-forge proj-data`
 
 ## Contributing
 
