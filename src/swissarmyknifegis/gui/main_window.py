@@ -36,7 +36,7 @@ class MainWindow(QMainWindow):
         
         # Create tab widget for different tools
         self.tab_widget = QTabWidget()
-        self.tab_widget.setTabPosition(QTabWidget.North)
+        self.tab_widget.setTabPosition(QTabWidget.TabPosition.North)
         self.tab_widget.setMovable(False)
         layout.addWidget(self.tab_widget)
         
@@ -74,26 +74,22 @@ class MainWindow(QMainWindow):
         layout.addLayout(button_layout)
         
     def _add_placeholder_tab(self) -> None:
-        """Add tool tabs. The About tab is always added last to remain rightmost."""
-        # Add Bounding Box Creator tool
-        self.bbox_creator_tool = BoundingBoxCreatorTool()
-        self.tab_widget.addTab(self.bbox_creator_tool, self.bbox_creator_tool.get_tool_name())
+        """Add tool tabs using registry pattern. The About tab is always added last to remain rightmost."""
+        # Registry of tool classes to instantiate
+        tool_classes = [
+            BoundingBoxCreatorTool,
+            QuadBBoxCreatorTool,
+            GISCropperTool,
+            CoordinateConverterTool,
+            RasterMergerTool,
+        ]
         
-        # Add 4-Point BBox Creator tool
-        self.quad_bbox_creator_tool = QuadBBoxCreatorTool()
-        self.tab_widget.addTab(self.quad_bbox_creator_tool, self.quad_bbox_creator_tool.get_tool_name())
-        
-        # Add GIS Cropper tool
-        self.gis_cropper_tool = GISCropperTool()
-        self.tab_widget.addTab(self.gis_cropper_tool, self.gis_cropper_tool.get_tool_name())
-        
-        # Add Coordinate Converter tool
-        self.crs_converter_tool = CoordinateConverterTool()
-        self.tab_widget.addTab(self.crs_converter_tool, self.crs_converter_tool.get_tool_name())
-        
-        # Add Raster Merger tool
-        self.raster_merger_tool = RasterMergerTool()
-        self.tab_widget.addTab(self.raster_merger_tool, self.raster_merger_tool.get_tool_name())
+        # Instantiate and add all tools
+        self.tools = []
+        for tool_class in tool_classes:
+            tool = tool_class()
+            self.tools.append(tool)
+            self.tab_widget.addTab(tool, tool.get_tool_name())
         
         # Add About tab last so it remains as the rightmost tab
         self.about_tab = AboutTab()

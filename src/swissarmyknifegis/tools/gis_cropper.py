@@ -1,3 +1,17 @@
+"""
+GIS Cropper Tool
+
+Provides spatial analysis and cropping capabilities for vector and raster GIS files.
+Supports bounding box intersection analysis, overlap calculation, and format-preserving
+cropping with automatic CRS handling.
+
+Features:
+- Analyze file/bbox spatial relationships (inside/outside/partial overlap)
+- Calculate overlap percentages for vectors (area) and rasters (pixels)
+- Crop multiple files to bounding box with batch processing
+- Support for multiple vector and raster formats
+"""
+
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple, Union
 import traceback

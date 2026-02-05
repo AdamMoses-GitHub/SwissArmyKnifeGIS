@@ -97,7 +97,7 @@ class MapCanvas(QGraphicsView):
         if self.current_zoom * self.zoom_factor <= self.max_zoom:
             self.scale(self.zoom_factor, self.zoom_factor)
             self.current_zoom *= self.zoom_factor
-            
+    
     def zoom_out(self) -> None:
         """Zoom out by fixed factor."""
         if self.current_zoom / self.zoom_factor >= self.min_zoom:

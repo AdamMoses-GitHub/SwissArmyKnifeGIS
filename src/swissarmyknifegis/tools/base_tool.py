@@ -139,19 +139,30 @@ class BaseTool(QWidget, metaclass=QABCMeta):
         }
         return resampling_map.get(resampling_name.lower(), gdalconst.GRA_Bilinear)
     
-    def _update_status(self, message: str, timeout_ms: int = 5000) -> None:
+    def _update_status(self, message: str, timeout_ms: int = 5000, permanent: bool = False) -> None:
         """Update the main window status bar with a message.
         
         Safely updates the status bar if the main window has one.
         
         Args:
             message: Message to display in the status bar
-            timeout_ms: How long to display the message in milliseconds (default 5000)
+            timeout_ms: How long to display the message in milliseconds (ignored if permanent=True)
+            permanent: If True, message stays until explicitly cleared
         """
         from PySide6.QtWidgets import QMainWindow
         main_window = self.window()
         if isinstance(main_window, QMainWindow) and main_window.statusBar():
-            main_window.statusBar().showMessage(message, timeout_ms)
+            if permanent:
+                main_window.statusBar().showMessage(message)
+            else:
+                main_window.statusBar().showMessage(message, timeout_ms)
+    
+    def _clear_status(self) -> None:
+        """Clear the status bar message."""
+        from PySide6.QtWidgets import QMainWindow
+        main_window = self.window()
+        if isinstance(main_window, QMainWindow) and main_window.statusBar():
+            main_window.statusBar().clearMessage()
     
     @staticmethod
     def sanitize_layer_name(name: str) -> str:
