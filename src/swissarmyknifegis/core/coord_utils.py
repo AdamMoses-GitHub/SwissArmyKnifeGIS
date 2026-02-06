@@ -7,11 +7,14 @@ This module provides functions for:
 - WGS84 ↔ UTM conversions
 """
 
+from functools import lru_cache
 from typing import Tuple, Optional
 from pyproj import Transformer
+from pyproj.exceptions import CRSError as PyprojCRSError
 from .exceptions import CoordinateError
 
 
+@lru_cache(maxsize=64)
 def calculate_utm_zone(longitude: float) -> int:
     """Calculate UTM zone number from longitude.
     
@@ -24,6 +27,7 @@ def calculate_utm_zone(longitude: float) -> int:
     return int((longitude + 180) / 6) + 1
 
 
+@lru_cache(maxsize=64)
 def calculate_utm_epsg(longitude: float, latitude: float) -> int:
     """Calculate UTM EPSG code from longitude and latitude.
     
@@ -81,7 +85,7 @@ def transform_coordinates(
         Tuple of (transformed_x, transformed_y)
         
     Raises:
-        Exception: If transformation fails
+        CoordinateError: If transformation fails or CRS is invalid
     """
     try:
         transformer = Transformer.from_crs(
@@ -89,10 +93,27 @@ def transform_coordinates(
             target_crs,
             always_xy=always_xy
         )
-        return transformer.transform(x, y)
+        transformed_x, transformed_y = transformer.transform(x, y)
+        return transformed_x, transformed_y
+    except PyprojCRSError as e:
+        raise CoordinateError(
+            f"Invalid CRS specification.\n"
+            f"Source: {source_crs}\n"
+            f"Target: {target_crs}\n"
+            f"Error: {str(e)}\n"
+            f"Tip: Ensure CRS codes are valid (e.g., 'EPSG:4326')"
+        ) from e
+    except (ValueError, TypeError) as e:
+        raise CoordinateError(
+            f"Invalid coordinate values: ({x}, {y})\n"
+            f"Error: {str(e)}"
+        ) from e
     except Exception as e:
         raise CoordinateError(
-            f"Failed to transform coordinates from {source_crs} to {target_crs}: {str(e)}"
+            f"Coordinate transformation failed.\n"
+            f"From {source_crs} to {target_crs}\n"
+            f"Coordinates: ({x}, {y})\n"
+            f"Error: {str(e)}"
         ) from e
 
 

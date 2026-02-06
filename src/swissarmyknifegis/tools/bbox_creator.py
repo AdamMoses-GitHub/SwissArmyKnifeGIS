@@ -114,6 +114,10 @@ class BoundingBoxCreatorTool(BaseTool):
         self.utm_zone_input.setPlaceholderText("e.g., 32633 for UTM Zone 33N")
         self.utm_zone_input.setValidator(QIntValidator(1000, 32799))  # Valid EPSG range
         self.utm_zone_input.setEnabled(False)
+        self.utm_zone_input.setToolTip(
+            "This control is only available in UTM coordinate mode.\n"
+            "Switch to 'UTM Coordinates' above to enable it."
+        )
         self.utm_zone_label = QLabel("EPSG Code:")
         centroid_layout.addRow(self.utm_zone_label, self.utm_zone_input)
         
@@ -125,6 +129,10 @@ class BoundingBoxCreatorTool(BaseTool):
         self.utm_rounding_combo.addItem("Round to nearest 1,000 m", 1000)
         self.utm_rounding_combo.addItem("Round to nearest 10,000 m", 10000)
         self.utm_rounding_combo.setEnabled(False)
+        self.utm_rounding_combo.setToolTip(
+            "This control is only available in UTM coordinate mode.\n"
+            "Switch to 'UTM Coordinates' above to enable it."
+        )
         self.utm_rounding_combo.currentIndexChanged.connect(self._on_utm_rounding_changed)
         self.utm_rounding_label = QLabel("Round Centroid:")
         centroid_layout.addRow(self.utm_rounding_label, self.utm_rounding_combo)

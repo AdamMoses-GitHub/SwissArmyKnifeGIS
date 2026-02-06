@@ -43,7 +43,20 @@ class MapCanvas(QGraphicsView):
         self._pan_start_pos = QPointF()
         
     def wheelEvent(self, event: QWheelEvent):
-        """Handle mouse wheel zoom."""
+        """Handle mouse wheel zoom interaction.
+        
+        Zooms the map view in or out based on wheel direction, with zoom anchored
+        at the mouse cursor position for intuitive navigation.
+        
+        Args:
+            event: QWheelEvent containing wheel delta and position information
+            
+        Behavior:
+            - Scroll up: Zoom in by self.zoom_factor (default 1.15x)
+            - Scroll down: Zoom out by 1/self.zoom_factor
+            - Zoom is clamped between min_zoom (0.1) and max_zoom (20.0)
+            - Transformation anchor is set to AnchorUnderMouse for natural feel
+        """
         # Calculate zoom factor based on wheel delta
         if event.angleDelta().y() > 0:
             factor = self.zoom_factor
@@ -57,7 +70,19 @@ class MapCanvas(QGraphicsView):
             self.current_zoom = new_zoom
             
     def mousePressEvent(self, event: QMouseEvent):
-        """Handle mouse press for panning."""
+        """Handle mouse press events for initiating pan interaction.
+        
+        Args:
+            event: QMouseEvent containing button and position information
+            
+        Behavior:
+            - Middle mouse button: Initiates panning mode
+              * Sets _is_panning flag to True
+              * Records starting position for delta calculation
+              * Changes cursor to ClosedHandCursor for visual feedback
+            - Other buttons: Delegates to parent class (enables default behaviors
+              like item selection when drag mode is active)
+        """
         if event.button() == Qt.MiddleButton:
             self._is_panning = True
             self._pan_start_pos = event.pos()
@@ -67,7 +92,20 @@ class MapCanvas(QGraphicsView):
             super().mousePressEvent(event)
             
     def mouseMoveEvent(self, event: QMouseEvent):
-        """Handle mouse move for panning."""
+        """Handle mouse move events for continuous panning.
+        
+        Args:
+            event: QMouseEvent containing current mouse position
+            
+        Behavior:
+            - If panning is active (_is_panning is True):
+              * Calculates position delta from last recorded position
+              * Updates scroll bars to pan the view by the delta amount
+              * Updates _pan_start_pos for next move event (continuous tracking)
+              * Negative delta values ensure natural pan direction (drag moves content)
+            - If not panning: Delegates to parent class for default behaviors
+              (hover effects, drag-select when in ScrollHandDrag mode, etc.)
+        """
         if self._is_panning:
             delta = event.pos() - self._pan_start_pos
             self._pan_start_pos = event.pos()
@@ -84,7 +122,19 @@ class MapCanvas(QGraphicsView):
             super().mouseMoveEvent(event)
             
     def mouseReleaseEvent(self, event: QMouseEvent):
-        """Handle mouse release."""
+        """Handle mouse release events to terminate panning.
+        
+        Args:
+            event: QMouseEvent containing button information
+            
+        Behavior:
+            - If middle button released while panning:
+              * Sets _is_panning flag to False (ends pan mode)
+              * Restores default arrow cursor
+              * Accepts event to prevent further propagation
+            - Other scenarios: Delegates to parent class for standard behaviors
+              (item click handling, context menus, etc.)
+        """
         if event.button() == Qt.MiddleButton and self._is_panning:
             self._is_panning = False
             self.setCursor(Qt.ArrowCursor)

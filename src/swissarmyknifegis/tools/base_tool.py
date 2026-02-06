@@ -4,8 +4,8 @@ Base class for GIS tool tabs.
 
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import Optional
-from PySide6.QtWidgets import QWidget, QFileDialog
+from typing import Optional, List
+from PySide6.QtWidgets import QWidget, QFileDialog, QTableWidget, QHeaderView, QAbstractItemView
 from swissarmyknifegis.core.config_manager import get_config_manager
 
 
@@ -353,3 +353,42 @@ class BaseTool(QWidget, metaclass=QABCMeta):
         """
         if hasattr(self, 'results_display'):
             self.results_display.append(f"ℹ {message}")
+    
+    @staticmethod
+    def create_file_table(
+        column_headers: List[str],
+        min_height: int = 200,
+        stretch_last_section: bool = True
+    ) -> QTableWidget:
+        """Create a standardized file table widget with common configuration.
+        
+        This helper method provides a consistent file table setup across different tools,
+        reducing code duplication and ensuring uniform behavior.
+        
+        Args:
+            column_headers: List of column header labels
+            min_height: Minimum height for the table in pixels
+            stretch_last_section: Whether to stretch the last column to fill available space
+            
+        Returns:
+            Configured QTableWidget ready to use
+            
+        Example:
+            table = self.create_file_table(
+                column_headers=["Filename", "Type", "CRS", "Path"],
+                min_height=250
+            )
+        """
+        table = QTableWidget()
+        table.setColumnCount(len(column_headers))
+        table.setHorizontalHeaderLabels(column_headers)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        
+        if stretch_last_section:
+            table.horizontalHeader().setStretchLastSection(True)
+        
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.setAlternatingRowColors(True)
+        table.setMinimumHeight(min_height)
+        
+        return table

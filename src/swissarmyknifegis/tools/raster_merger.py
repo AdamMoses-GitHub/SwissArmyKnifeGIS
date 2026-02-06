@@ -89,10 +89,9 @@ class RasterMergerTool(BaseTool):
         files_layout = QVBoxLayout()
 
         # File table
-        self.files_table = QTableWidget()
-        self.files_table.setColumnCount(8)
-        self.files_table.setHorizontalHeaderLabels(
-            ["Filename", "CRS", "Width", "Height", "Resolution (m)", "Data Type", "NoData Value", "Path"]
+        self.files_table = BaseTool.create_file_table(
+            column_headers=["Filename", "CRS", "Width", "Height", "Resolution (m)", "Data Type", "NoData Value", "Path"],
+            min_height=200
         )
         self.files_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows

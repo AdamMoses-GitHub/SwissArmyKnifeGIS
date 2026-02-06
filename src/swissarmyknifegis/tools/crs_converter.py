@@ -108,14 +108,10 @@ class CoordinateConverterTool(BaseTool):
         files_layout.addLayout(file_buttons_layout)
         
         # Files table
-        self.files_table = QTableWidget()
-        self.files_table.setColumnCount(5)
-        self.files_table.setHorizontalHeaderLabels(["Filename", "Type", "Current CRS", "Features/Size", "Path"])
-        self.files_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        self.files_table.horizontalHeader().setStretchLastSection(True)
-        self.files_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.files_table.setAlternatingRowColors(True)
-        self.files_table.setMinimumHeight(200)
+        self.files_table = BaseTool.create_file_table(
+            column_headers=["Filename", "Type", "Current CRS", "Features/Size", "Path"],
+            min_height=200
+        )
         files_layout.addWidget(self.files_table)
         
         files_group.setLayout(files_layout)
