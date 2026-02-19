@@ -62,10 +62,6 @@ class RasterMergerTool(BaseTool):
         }
         return dtype_map.get(numpy_dtype, gdalconst.GDT_Float32)
     
-    def _map_resampling_to_gdal(self, resampling_name: str) -> int:
-        """Map resampling method name to GDAL constant. Uses BaseTool.map_resampling_to_gdal."""
-        return BaseTool.map_resampling_to_gdal(resampling_name)
-    
     def _get_gdal_merge_algorithm(self, merge_method: str) -> Optional[str]:
         """Get GDAL VRT pixel function for merge method, or None if not supported."""
         # GDAL VRT pixel functions for different merge methods
@@ -508,7 +504,7 @@ class RasterMergerTool(BaseTool):
         try:
             # Map parameters to GDAL constants
             gdal_dtype = self._map_dtype_to_gdal(output_dtype)
-            gdal_resampling = self._map_resampling_to_gdal(resampling_method)
+            gdal_resampling = BaseTool.map_resampling_to_gdal(resampling_method)
             
             # Handle file order for 'last' merge method
             if merge_method == 'last':

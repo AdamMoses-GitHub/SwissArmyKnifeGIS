@@ -74,10 +74,6 @@ class CoordinateConverterTool(BaseTool):
         """Return the display name for this tool."""
         return "CRS Converter"
     
-    def _map_resampling_to_gdal(self, resampling_name: str) -> int:
-        """Map resampling method name to GDAL constant. Uses BaseTool.map_resampling_to_gdal."""
-        return BaseTool.map_resampling_to_gdal(resampling_name)
-    
     def setup_ui(self):
         """Set up the user interface for the coordinate converter tool."""
         main_layout = QVBoxLayout(self)
@@ -663,7 +659,7 @@ class CoordinateConverterTool(BaseTool):
             k for k, v in self.resampling_methods.items()
             if v == resampling_text
         )
-        gdal_resampling = self._map_resampling_to_gdal(resampling_name)
+        gdal_resampling = BaseTool.map_resampling_to_gdal(resampling_name)
         
         # Get compression setting
         compression = self.compression_combo.currentText()

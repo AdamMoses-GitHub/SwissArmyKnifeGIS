@@ -14,16 +14,14 @@ Features:
 
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple, Union
-import traceback
 import tempfile
-import json
 import logging
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
-    QLabel, QLineEdit, QPushButton, QFileDialog, QMessageBox,
-    QListWidget, QTextEdit, QSplitter, QProgressDialog
+    QVBoxLayout, QHBoxLayout, QGroupBox,
+    QLineEdit, QPushButton, QFileDialog, QMessageBox,
+    QTableWidgetItem, QTextEdit, QProgressDialog
 )
 from PySide6.QtCore import QCoreApplication
 
@@ -33,7 +31,7 @@ from rasterio.mask import mask
 from shapely.geometry import box, mapping
 from shapely.geometry.base import BaseGeometry
 import numpy as np
-from osgeo import gdal, ogr, osr
+from osgeo import gdal, osr
 
 from swissarmyknifegis.tools.base_tool import BaseTool
 
@@ -110,16 +108,6 @@ class GISCropperTool(BaseTool):
             return geom.iloc[0]
         return geom
 
-    """
-    Tool for analyzing and cropping GIS files by a bounding box.
-
-    Features:
-    - Select multiple vector or raster GIS files
-    - Select a bounding box file
-    - Analyze spatial relationship (inside, partial, outside)
-    - Crop all files by the bounding box
-    """
-
     def __init__(self, parent: Optional[Any] = None) -> None:
         super().__init__(parent)
         self.gis_files: List[str] = []
@@ -130,7 +118,39 @@ class GISCropperTool(BaseTool):
     def get_tool_name(self) -> str:
         """Return the display name for this tool."""
         return "GIS Cropper"
-        
+
+    # ------------------------------------------------------------------ #
+    # File-type / CRS probe                                                #
+    # ------------------------------------------------------------------ #
+    _RASTER_EXTS = frozenset({".tif", ".tiff", ".img", ".asc", ".vrt", ".nc", ".hdf", ".h5"})
+    _VECTOR_EXTS = frozenset({".shp", ".geojson", ".gpkg", ".kml", ".gml", ".json", ".fgb"})
+
+    def _probe_file_type_and_crs(self, file_path: str) -> tuple:
+        """Return (file_type, crs_string) for a GIS file without fully loading it.
+
+        Uses file extension to classify type, then opens the file just enough
+        to read the CRS. Falls back gracefully on any error.
+        """
+        ext = Path(file_path).suffix.lower()
+        if ext in self._RASTER_EXTS:
+            file_type = "Raster"
+            try:
+                with rasterio.open(file_path) as src:
+                    crs = str(src.crs) if src.crs else "No CRS"
+            except Exception:
+                crs = "Unknown"
+        else:
+            file_type = "Vector"
+            try:
+                gdf = gpd.read_file(file_path, rows=0)
+                crs = str(gdf.crs) if gdf.crs else "No CRS"
+            except Exception:
+                crs = "Unknown"
+        return file_type, crs
+
+    # ------------------------------------------------------------------ #
+    # UI                                                                   #
+    # ------------------------------------------------------------------ #
     def setup_ui(self) -> None:
         """Set up the user interface."""
         main_layout = QVBoxLayout(self)
@@ -140,10 +160,12 @@ class GISCropperTool(BaseTool):
         gis_files_group = QGroupBox("GIS Files to Process")
         gis_files_layout = QVBoxLayout(gis_files_group)
         
-        # List widget to show selected files
-        self.gis_files_list = QListWidget()
-        self.gis_files_list.setMinimumHeight(150)
-        gis_files_layout.addWidget(self.gis_files_list)
+        # Table widget showing file metadata for easy pre-flight verification
+        self.gis_files_table = BaseTool.create_file_table(
+            column_headers=["Filename", "Type", "CRS", "Path"],
+            min_height=150,
+        )
+        gis_files_layout.addWidget(self.gis_files_table)
         
         # Buttons for file management
         gis_buttons_layout = QHBoxLayout()
@@ -243,8 +265,15 @@ class GISCropperTool(BaseTool):
             for file_path in file_paths:
                 if file_path not in self.gis_files:
                     self.gis_files.append(file_path)
-                    self.gis_files_list.addItem(Path(file_path).name)
-            
+                    file_type, crs = self._probe_file_type_and_crs(file_path)
+                    row = self.gis_files_table.rowCount()
+                    self.gis_files_table.insertRow(row)
+                    for col, text in enumerate([Path(file_path).name, file_type, crs, file_path]):
+                        item = QTableWidgetItem(text)
+                        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                        self.gis_files_table.setItem(row, col, item)
+            self.gis_files_table.resizeColumnsToContents()
+
             # Clear previous analysis results
             self.analysis_results = {}
             self.results_text.clear()
@@ -252,15 +281,17 @@ class GISCropperTool(BaseTool):
             
     def _on_remove_gis_files(self) -> None:
         """Handle Remove Selected button click."""
-        selected_items = self.gis_files_list.selectedItems()
-        if not selected_items:
+        selected_rows = sorted(
+            set(idx.row() for idx in self.gis_files_table.selectedIndexes()),
+            reverse=True,
+        )
+        if not selected_rows:
             return
-            
-        for item in selected_items:
-            row = self.gis_files_list.row(item)
-            self.gis_files_list.takeItem(row)
+
+        for row in selected_rows:
+            self.gis_files_table.removeRow(row)
             del self.gis_files[row]
-        
+
         # Clear previous analysis results
         self.analysis_results = {}
         self.results_text.clear()
@@ -269,7 +300,7 @@ class GISCropperTool(BaseTool):
     def _on_clear_gis_files(self):
         """Handle Clear All button click."""
         self.gis_files.clear()
-        self.gis_files_list.clear()
+        self.gis_files_table.setRowCount(0)
         self.analysis_results = {}
         self.results_text.clear()
         self._update_button_states()
