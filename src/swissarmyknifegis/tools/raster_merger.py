@@ -1074,31 +1074,21 @@ class RasterMergerTool(BaseTool):
         
         # Validate NoData value compatibility with data type
         if not self.nodata_none_checkbox.isChecked():
-            nodata_text = self.nodata_value_input.text().strip()
-            if nodata_text:
-                try:
-                    nodata_value = float(nodata_text)
-                    datatype_text = self.datatype_combo.currentText()
-                    output_dtype = next(
-                        k for k, v in self.datatype_options.items() 
-                        if v == datatype_text
-                    )
-                    
-                    # Check compatibility
-                    if output_dtype.startswith('int') or output_dtype.startswith('uint'):
-                        if nodata_value != int(nodata_value):
-                            QMessageBox.warning(
-                                self,
-                                "Validation Error",
-                                f"NoData value {nodata_value} is not compatible with integer data type {output_dtype}.\n"
-                                "Please use an integer value."
-                            )
-                            return False
-                except ValueError:
+            nodata_value = self.nodata_spinbox.value()
+            datatype_text = self.datatype_combo.currentText()
+            output_dtype = next(
+                k for k, v in self.datatype_options.items()
+                if v == datatype_text
+            )
+
+            # Check compatibility
+            if output_dtype.startswith('int') or output_dtype.startswith('uint'):
+                if nodata_value != int(nodata_value):
                     QMessageBox.warning(
                         self,
                         "Validation Error",
-                        "NoData value must be a valid number."
+                        f"NoData value {nodata_value} is not compatible with integer data type {output_dtype}.\n"
+                        "Please use an integer value."
                     )
                     return False
         

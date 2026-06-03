@@ -5,6 +5,7 @@ Batch reproject GIS files (vector and raster) between different coordinate refer
 """
 
 import logging
+import os
 from typing import Optional, List, Dict, Any
 
 from PySide6.QtWidgets import (

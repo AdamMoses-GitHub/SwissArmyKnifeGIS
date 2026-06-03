@@ -761,7 +761,7 @@ class GISCropperTool(BaseTool):
             True if inputs are valid, False otherwise
         """
         # Check if GIS files are loaded
-        if not self.loaded_files:
+        if not self.gis_files:
             QMessageBox.warning(
                 self,
                 "Validation Error",
@@ -770,7 +770,7 @@ class GISCropperTool(BaseTool):
             return False
         
         # Check if bounding box file is selected
-        if not self.bbox_file_path.strip():
+        if not self.bbox_file:
             QMessageBox.warning(
                 self,
                 "Validation Error",
@@ -779,7 +779,8 @@ class GISCropperTool(BaseTool):
             return False
         
         # Check if output directory is specified
-        if not self.output_directory.strip():
+        output_dir_text = self.output_dir_input.text().strip()
+        if not output_dir_text:
             QMessageBox.warning(
                 self,
                 "Validation Error",
@@ -788,7 +789,7 @@ class GISCropperTool(BaseTool):
             return False
         
         # Check if output directory exists or can be created
-        output_dir = Path(self.output_directory)
+        output_dir = Path(output_dir_text)
         if not output_dir.exists():
             if not self._safe_create_directory(str(output_dir)):
                 return False
