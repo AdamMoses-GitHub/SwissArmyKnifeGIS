@@ -27,6 +27,7 @@ from PySide6.QtCore import QCoreApplication
 
 import geopandas as gpd
 import rasterio
+from rasterio.errors import RasterioError
 from rasterio.mask import mask
 from shapely.geometry import box, mapping
 from shapely.geometry.base import BaseGeometry
@@ -137,14 +138,14 @@ class GISCropperTool(BaseTool):
             try:
                 with rasterio.open(file_path) as src:
                     crs = str(src.crs) if src.crs else "No CRS"
-            except Exception:
+            except (RasterioError, OSError, ValueError):
                 crs = "Unknown"
         else:
             file_type = "Vector"
             try:
                 gdf = gpd.read_file(file_path, rows=0)
                 crs = str(gdf.crs) if gdf.crs else "No CRS"
-            except Exception:
+            except (OSError, ValueError, RuntimeError):
                 crs = "Unknown"
         return file_type, crs
 
@@ -645,10 +646,9 @@ class GISCropperTool(BaseTool):
                     clipped, _ = mask(src, bbox_shapes, crop=False, filled=True)
                     clipped_masked = np.ma.masked_array(clipped[0], mask=(clipped[0] == src.nodata) if src.nodata is not None else False)
                     inside_pixels = np.count_nonzero(~clipped_masked.mask) if hasattr(clipped_masked, 'mask') else clipped_masked.size
-                except Exception as e:
+                except (RasterioError, ValueError, RuntimeError, OSError) as e:
                     # Log masking failure but continue with conservative estimate
-                    import logging
-                    logging.debug(f"Pixel masking calculation failed: {e}")
+                    logger.debug(f"Pixel masking calculation failed: {e}")
                     inside_pixels = 0
                 result.update(self.analyze_spatial_relationship(
                     raster_geom, bbox_geom, file_bounds, bbox_bounds,

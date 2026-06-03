@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any, Optional, Dict
 
@@ -33,6 +32,23 @@ class ConfigManager:
         
         # Load existing config or create new one
         self.load()
+
+    @staticmethod
+    def _build_default_config() -> Dict[str, Any]:
+        """Return default configuration structure."""
+        return {
+            "paths": {
+                "input": {},
+                "output": {},
+                "bbox_creator": {},
+                "raster_merger": {},
+                "crs_converter": {},
+                "gis_cropper": {},
+            },
+            "window": {},
+            "tools": {},
+            "preferences": {},
+        }
     
     def load(self) -> None:
         """Load configuration from JSON file."""
@@ -41,37 +57,16 @@ class ConfigManager:
                 with open(self._config_file, 'r', encoding='utf-8') as f:
                     self._config = json.load(f)
             else:
-                # Initialize with default structure
-                self._config = {
-                    "paths": {
-                        "input": {},
-                        "output": {},
-                        "bbox_creator": {},
-                        "raster_merger": {},
-                        "crs_converter": {},
-                        "gis_cropper": {},
-                    },
-                    "window": {},
-                    "tools": {},
-                    "preferences": {},
-                }
+                self._config = self._build_default_config()
                 self.save()
         except (json.JSONDecodeError, IOError) as e:
-            print(f"Warning: Failed to load config file: {e}")
-            print("Creating new configuration with defaults")
-            self._config = {
-                "paths": {
-                    "input": {},
-                    "output": {},
-                    "bbox_creator": {},
-                    "raster_merger": {},
-                    "crs_converter": {},
-                    "gis_cropper": {},
-                },
-                "window": {},
-                "tools": {},
-                "preferences": {},
-            }
+            logger.warning(
+                "Failed to load config file %s; rebuilding with defaults. Error: %s",
+                self._config_file,
+                e,
+                exc_info=True,
+            )
+            self._config = self._build_default_config()
     
     def save(self) -> None:
         """Save configuration to JSON file.
@@ -181,19 +176,7 @@ class ConfigManager:
     
     def reset(self):
         """Reset configuration to defaults."""
-        self._config = {
-            "paths": {
-                "input": {},
-                "output": {},
-                "bbox_creator": {},
-                "raster_merger": {},
-                "crs_converter": {},
-                "gis_cropper": {},
-            },
-            "window": {},
-            "tools": {},
-            "preferences": {},
-        }
+        self._config = self._build_default_config()
         self.save()
 
 

@@ -12,13 +12,15 @@ from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QComboBox, QLineEdit, QPushButton, QTextEdit,
     QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QCheckBox
+    QCheckBox
 )  
 from PySide6.QtCore import Qt, QCoreApplication
 
 from pyproj import CRS
+from pyproj.exceptions import CRSError as PyprojCRSError
 import geopandas as gpd
 import rasterio
+from rasterio.errors import RasterioError
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 from osgeo import gdal, gdalconst
 
@@ -249,10 +251,9 @@ class CoordinateConverterTool(BaseTool):
                     crs = CRS.from_string(crs_str)
                     display_name = f"{crs.name} ({crs_str})"
                     self.output_crs_combo.addItem(display_name, crs_str)
-                except Exception as e:
+                except (PyprojCRSError, ValueError) as e:
                     # Fallback to raw CRS string if parsing fails
-                    import logging
-                    logging.debug(f"Failed to parse CRS name for {crs_str}: {e}")
+                    logger.debug(f"Failed to parse CRS name for {crs_str}: {e}")
                     self.output_crs_combo.addItem(crs_str, crs_str)
         
         # Set default to first common CRS
@@ -335,8 +336,8 @@ class CoordinateConverterTool(BaseTool):
                         'details': f"{len(gdf)} features",
                         'geometry_type': gdf.geometry.type.unique()[0] if len(gdf) > 0 else "Unknown"
                     }
-                except Exception as e:
-                    pass
+                except (OSError, ValueError, RuntimeError) as e:
+                    logger.debug(f"Failed to inspect vector file '{file_path}': {e}")
             
             # Try as raster
             if ext in ['.tif', '.tiff', '.img', '.jpg', '.png']:
@@ -354,12 +355,12 @@ class CoordinateConverterTool(BaseTool):
                             'height': src.height,
                             'bands': src.count
                         }
-                except Exception as e:
-                    pass
+                except (RasterioError, OSError, ValueError, RuntimeError) as e:
+                    logger.debug(f"Failed to inspect raster file '{file_path}': {e}")
             
             return None
             
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             log_and_notify(
                 e,
                 f"Failed to read file. Please ensure it's a valid GIS file.",
@@ -472,7 +473,7 @@ class CoordinateConverterTool(BaseTool):
             msg.setIcon(QMessageBox.Icon.Information)
             msg.exec()
             
-        except Exception as e:
+        except (PyprojCRSError, ValueError) as e:
             QMessageBox.critical(self, "Error", f"Invalid CRS: {str(e)}")
     
     def _browse_output_directory(self):
@@ -510,7 +511,7 @@ class CoordinateConverterTool(BaseTool):
                                 f"File '{file_info['filename']}' has no CRS defined. Cannot reproject."
                             )
                             return None
-                    except Exception as e:
+                    except (OSError, ValueError, RuntimeError) as e:
                         QMessageBox.critical(
                             self,
                             "Error Reading File",
@@ -527,7 +528,7 @@ class CoordinateConverterTool(BaseTool):
                                     f"File '{file_info['filename']}' has no CRS defined. Cannot reproject."
                                 )
                                 return None
-                    except Exception as e:
+                    except (RasterioError, OSError, ValueError, RuntimeError) as e:
                         QMessageBox.critical(
                             self,
                             "Error Reading File",
@@ -535,7 +536,7 @@ class CoordinateConverterTool(BaseTool):
                         )
                         return None
             return output_crs
-        except Exception as e:
+        except (PyprojCRSError, ValueError) as e:
             QMessageBox.critical(self, "Invalid CRS", f"Invalid output CRS: {str(e)}")
             return None
     
@@ -570,7 +571,7 @@ class CoordinateConverterTool(BaseTool):
         if not os.path.exists(output_dir):
             try:
                 os.makedirs(output_dir)
-            except Exception as e:
+            except OSError as e:
                 QMessageBox.critical(self, "Error", f"Failed to create output directory:\n{str(e)}")
                 return
         
@@ -609,7 +610,7 @@ class CoordinateConverterTool(BaseTool):
                 self.results_display.append(f"✓ {file_info['filename']}")
                 success_count += 1
                 
-            except Exception as e:
+            except (RasterioError, OSError, ValueError, RuntimeError) as e:
                 self.results_display.append(f"✗ {file_info['filename']}: {str(e)}")
                 error_count += 1
         
@@ -632,7 +633,7 @@ class CoordinateConverterTool(BaseTool):
         
         # Set CRS if missing
         if gdf.crs is None:
-            raise Exception("No CRS defined - cannot reproject")
+            raise RuntimeError("No CRS defined - cannot reproject")
         
         # Reproject
         gdf_reprojected = gdf.to_crs(output_crs)
@@ -671,13 +672,13 @@ class CoordinateConverterTool(BaseTool):
         # Open source dataset
         src_ds = gdal.Open(file_info['path'], gdal.GA_ReadOnly)
         if src_ds is None:
-            raise Exception("Failed to open raster file")
+            raise RuntimeError("Failed to open raster file")
         
         try:
             # Check if source has CRS
             src_crs = src_ds.GetProjection()
             if not src_crs:
-                raise Exception("No CRS defined - cannot reproject")
+                raise RuntimeError("No CRS defined - cannot reproject")
             
             # Prepare warp options
             warp_options = {
@@ -704,7 +705,7 @@ class CoordinateConverterTool(BaseTool):
             result_ds = gdal.Warp(output_path, src_ds, options=warp_opts)
             
             if result_ds is None:
-                raise Exception("GDAL Warp failed")
+                raise RuntimeError("GDAL Warp failed")
             
             # Clean up
             result_ds = None

@@ -2,7 +2,6 @@
 Main application window with tabbed interface for GIS tools.
 """
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout,

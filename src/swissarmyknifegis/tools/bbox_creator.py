@@ -21,6 +21,7 @@ from pyproj import CRS
 
 from swissarmyknifegis.tools.base_tool import BaseTool
 from swissarmyknifegis.core.cities import get_major_cities, populate_city_combo
+from swissarmyknifegis.core.exceptions import CoordinateError
 from swissarmyknifegis.core.coord_utils import (
     calculate_utm_epsg, validate_utm_epsg, wgs84_to_utm, utm_to_wgs84, transform_coordinates
 )
@@ -524,7 +525,7 @@ class BoundingBoxCreatorTool(BaseTool):
                         self.x_coord_input.setValue(lon)
                         self.y_coord_input.setValue(lat)
                         return
-                except (ValueError, Exception):
+                except (ValueError, CoordinateError):
                     pass
             
             # If conversion failed, set defaults
@@ -563,7 +564,7 @@ class BoundingBoxCreatorTool(BaseTool):
                 self.x_coord_input.setValue(utm_x)
                 self.y_coord_input.setValue(utm_y)
                 
-            except Exception:
+            except (ValueError, CoordinateError, TypeError):
                 # If conversion failed, set defaults
                 self.x_coord_input.setValue(500000.0)
                 self.y_coord_input.setValue(5000000.0)

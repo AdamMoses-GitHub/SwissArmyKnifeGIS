@@ -10,10 +10,11 @@ This module provides safe wrappers around common GDAL operations to ensure:
 from pathlib import Path
 from typing import Optional, Union, List
 from osgeo import gdal
+from .exceptions import GDALError
 
 
-class GDALOperationError(Exception):
-    """Custom exception for GDAL operations with enhanced error context."""
+class GDALOperationError(GDALError):
+    """GDAL operation error with enhanced context."""
     pass
 
 
@@ -236,6 +237,7 @@ def validate_raster_compatibility(
     if len(file_paths) < 2:
         return True, None  # Single file is always compatible
     
+    ref_ds: Optional[gdal.Dataset] = None
     try:
         # Open first file as reference
         ref_ds = safe_gdal_open(file_paths[0])
@@ -245,34 +247,40 @@ def validate_raster_compatibility(
         
         # Check other files
         for file_path in file_paths[1:]:
-            ds = safe_gdal_open(file_path)
-            
-            if check_crs:
-                if ds.GetProjection() != ref_crs:
-                    return False, (
-                        f"CRS mismatch detected:\n"
-                        f"Reference: {Path(file_paths[0]).name}\n"
-                        f"Different: {Path(file_path).name}"
-                    )
-            
-            if check_resolution:
-                gt = ds.GetGeoTransform()
-                if gt[1] != ref_geotransform[1] or gt[5] != ref_geotransform[5]:
-                    return False, (
-                        f"Resolution mismatch detected:\n"
-                        f"Reference: {ref_geotransform[1]} x {abs(ref_geotransform[5])}\n"
-                        f"Different: {gt[1]} x {abs(gt[5])} in {Path(file_path).name}"
-                    )
-            
-            if check_bands:
-                if ds.RasterCount != ref_bands:
-                    return False, (
-                        f"Band count mismatch detected:\n"
-                        f"Reference: {ref_bands} bands\n"
-                        f"Different: {ds.RasterCount} bands in {Path(file_path).name}"
-                    )
+            ds: Optional[gdal.Dataset] = None
+            try:
+                ds = safe_gdal_open(file_path)
+                
+                if check_crs:
+                    if ds.GetProjection() != ref_crs:
+                        return False, (
+                            f"CRS mismatch detected:\n"
+                            f"Reference: {Path(file_paths[0]).name}\n"
+                            f"Different: {Path(file_path).name}"
+                        )
+                
+                if check_resolution:
+                    gt = ds.GetGeoTransform()
+                    if gt[1] != ref_geotransform[1] or gt[5] != ref_geotransform[5]:
+                        return False, (
+                            f"Resolution mismatch detected:\n"
+                            f"Reference: {ref_geotransform[1]} x {abs(ref_geotransform[5])}\n"
+                            f"Different: {gt[1]} x {abs(gt[5])} in {Path(file_path).name}"
+                        )
+                
+                if check_bands:
+                    if ds.RasterCount != ref_bands:
+                        return False, (
+                            f"Band count mismatch detected:\n"
+                            f"Reference: {ref_bands} bands\n"
+                            f"Different: {ds.RasterCount} bands in {Path(file_path).name}"
+                        )
+            finally:
+                ds = None
         
         return True, None
         
     except GDALOperationError as e:
         return False, f"Error validating rasters: {str(e)}"
+    finally:
+        ref_ds = None

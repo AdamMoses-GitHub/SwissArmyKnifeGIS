@@ -2,7 +2,7 @@
 Map canvas widget for displaying and interacting with GIS data.
 """
 
-from PySide6.QtCore import Qt, QPointF, QRectF
+from PySide6.QtCore import Qt, QPointF
 from PySide6.QtWidgets import QGraphicsView, QGraphicsScene
 from PySide6.QtGui import QPainter, QWheelEvent, QMouseEvent
 

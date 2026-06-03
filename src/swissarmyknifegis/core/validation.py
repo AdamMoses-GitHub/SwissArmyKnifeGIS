@@ -6,15 +6,26 @@ CRS codes, and coordinates.
 """
 
 import logging
+import inspect
 from functools import wraps
 from pathlib import Path
-from typing import Callable, TypeVar, Any, Optional, Union
+from typing import Callable, TypeVar, Any
 
 from .exceptions import ValidationError, CoordinateError, CRSError, FileOperationError
 
 logger = logging.getLogger(__name__)
 
 F = TypeVar('F', bound=Callable[..., Any])
+
+
+def _get_bound_argument(func: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], param_name: str) -> Any:
+    """Resolve a parameter value from args/kwargs using Python signature binding."""
+    try:
+        signature = inspect.signature(func)
+        bound = signature.bind_partial(*args, **kwargs)
+        return bound.arguments.get(param_name)
+    except (TypeError, ValueError):
+        return kwargs.get(param_name)
 
 
 def validate_path(
@@ -43,17 +54,7 @@ def validate_path(
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            # Find the path parameter
-            path_value = kwargs.get(param_name)
-            
-            # For positional args, try to infer from annotations
-            if path_value is None:
-                annotations = getattr(func, '__annotations__', {})
-                param_names = list(annotations.keys())
-                if param_name in param_names:
-                    idx = param_names.index(param_name)
-                    if idx < len(args):
-                        path_value = args[idx]
+            path_value = _get_bound_argument(func, args, kwargs, param_name)
             
             if path_value is not None:
                 path_obj = Path(path_value)
@@ -108,8 +109,8 @@ def validate_coordinates(
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            lat = kwargs.get(lat_param)
-            lon = kwargs.get(lon_param)
+            lat = _get_bound_argument(func, args, kwargs, lat_param)
+            lon = _get_bound_argument(func, args, kwargs, lon_param)
             
             if lat is not None and not (-90 <= lat <= 90):
                 raise CoordinateError(f"Invalid latitude {lat}. Must be between -90 and 90.")
@@ -144,7 +145,7 @@ def validate_crs(param_name: str = "crs") -> Callable[[F], F]:
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            crs_value = kwargs.get(param_name)
+            crs_value = _get_bound_argument(func, args, kwargs, param_name)
             
             if crs_value is not None:
                 try:
@@ -178,7 +179,7 @@ def validate_utm_epsg(param_name: str = "epsg_code") -> Callable[[F], F]:
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            epsg = kwargs.get(param_name)
+            epsg = _get_bound_argument(func, args, kwargs, param_name)
             
             if epsg is not None:
                 if not isinstance(epsg, int):
@@ -213,7 +214,7 @@ def validate_not_empty(param_name: str) -> Callable[[F], F]:
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            value = kwargs.get(param_name)
+            value = _get_bound_argument(func, args, kwargs, param_name)
             
             if value is not None and len(value) == 0:
                 raise ValidationError(f"Parameter '{param_name}' cannot be empty.")

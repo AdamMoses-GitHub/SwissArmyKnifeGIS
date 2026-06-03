@@ -97,7 +97,7 @@ The application features a tabbed interface with five main tools. Here are commo
 
 **Example Use Case**: You have GPS coordinates from four corner markers placed in the field that define your agricultural study plot. Input these exact coordinates to create a polygon boundary that matches your field layout.
 
-#### 2. GIS Cropper
+#### 3. GIS Cropper
 
 **Scenario**: You have a massive satellite image or vector dataset covering an entire continent, but you only need data for a small region.
 
@@ -116,7 +116,7 @@ The application features a tabbed interface with five main tools. Here are commo
 
 **Example Use Case**: You downloaded a 5 GB Sentinel-2 scene covering three states, but you only need the portion covering your 500 km² national park. Load the scene, draw a box around the park, analyze (shows 3% overlap), crop, and reduce file size to 150 MB.
 
-#### 3. Coordinate System Converter
+#### 4. Coordinate System Converter
 
 **Scenario**: Your collaborators use different coordinate systems and you need to reproject your entire dataset to match their requirements.
 
@@ -138,7 +138,7 @@ The application features a tabbed interface with five main tools. Here are commo
 
 **Example Use Case**: Your team receives 50 shapefiles in various UTM zones from different field surveys. You need everything in WGS84 (EPSG:4326) for web mapping. Load all 50 files, select WGS84 as target, click Reproject, and the tool processes the entire batch in minutes.
 
-#### 4. Raster Merger
+#### 5. Raster Merger
 
 **Scenario**: You have multiple satellite tiles or drone imagery covering adjacent areas that need to be stitched together into a single seamless raster.
 
@@ -208,15 +208,6 @@ SwissArmyKnifeGIS/
 ├── INSTALL_AND_USAGE.md         # This file
 ├── LICENSE                      # MIT License
 └── TODO.md                      # Future features and roadmap
-```
-│   └── __pycache__/
-├── environment.yml            # Conda environment specification
-├── pyproject.toml             # Project metadata and dependencies
-├── setup.py                   # Installation script
-├── README.md                  # Project overview
-├── INSTALL_AND_USAGE.md       # This file
-├── LICENSE                    # MIT License
-└── TODO.md                    # Future features and roadmap
 ```
 
 **Key Directories Explained**:

@@ -49,8 +49,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/swissarmyknifegis"
-Repository = "https://github.com/yourusername/swissarmyknifegis"
+Homepage = "https://github.com/AdamMoses-GitHub/SwissArmyKnifeGIS"
+Repository = "https://github.com/AdamMoses-GitHub/SwissArmyKnifeGIS"
 
 [project.scripts]
 swissarmyknifegis = "swissarmyknifegis:run_app"
